@@ -65,6 +65,20 @@
     #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.6);color:#fff;z-index:65;font-size:28px;font-weight:800;text-align:center;padding:24px;}
     #pauseOverlay.show{display:flex}
     #pauseOverlay small{display:block;font-weight:600;opacity:.9;margin-top:8px}
+    #pauseOverlay .pauseModal {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    #pauseOverlay .pauseIcon {
+      font-size: 48px;
+      line-height: 1;
+    }
+    #pauseOverlay:active .pauseIcon {
+      transform: scale(.96);
+    }
+
   </style>
 </head>
 <body>
@@ -72,7 +86,14 @@
 <!-- Confetti canvas -->
 <canvas id="confetti"></canvas>
 <!-- Pause overlay -->
-<div id="pauseOverlay">⏸️ Paused<br><small>Tap the timer to resume</small></div>
+<!-- Pause overlay -->
+<div id="pauseOverlay" role="button" aria-label="Resume (tap)">
+  <div class="pauseModal">
+    <div class="pauseIcon" aria-hidden="true">⏸️</div>
+    <div class="pauseText">Paused</div>
+    <small>Tap to resume</small>
+  </div>
+</div>
 
 <button id="hamburger" class="hamburger" aria-label="Toggle menu">
   <span class="bar"></span>
@@ -386,6 +407,8 @@ function pauseGame(){ if(state.paused) return; state.paused=true; clearInterval(
 function resumeGame(){ if(!state.paused) return; state.paused=false; pauseOverlay.classList.remove('show'); elBoardShell.classList.remove('hide'); padWrap.classList.remove('hide'); startTimer(); }
 function togglePause(){ state.paused ? resumeGame() : pauseGame(); }
 elTimerPill.addEventListener('click', togglePause);
+pauseOverlay.addEventListener('click', resumeGame);
+
 
 // boot
 newGame('easy');
