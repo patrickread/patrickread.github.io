@@ -22,7 +22,7 @@
     .pill.button{cursor:pointer}
 
     /* Board */
-    .boardShell{padding:10px;background:#fff;border-radius:20px;box-shadow:var(--shadow);max-width:100%;overflow:hidden}
+    .boardShell{padding:10px;background:#fff;border-radius:20px;box-shadow:var(--shadow);max-width:100%;width:100%;overflow:hidden}
     .board{display:grid;grid-template-columns:repeat(9,1fr);gap:var(--grid-gap);background:#cbd5e1;padding:var(--grid-gap);border-radius:14px;max-width:100%;width:100%}
     .cell{position:relative;aspect-ratio:1/1;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:22px;border-radius:6px;user-select:none;transition:background .12s, outline-color .12s, transform .03s}
     .cell.given{color:#0f172a;font-weight:800}
@@ -76,11 +76,13 @@
 
     /* Mobile optimizations to avoid horizontal scroll */
     @media (max-width:600px){
-      .wrap{padding:16px}
+      .wrap{padding:12px}
       .left .card,.right .card{width:100%}
-      .cell{font-size:18px}
-      .btn.num{height:60px}
+      .left .card{align-items:stretch !important}
+      .cell{font-size:24px}
+      .btn.num{height:64px}
       .pills{gap:6px}
+      .pad{max-width:480px !important}
     }
   </style>
 </head>
@@ -109,6 +111,7 @@
           <!-- Timer (tap to pause/resume) -->
           <span id="timerPill" class="pill button" title="Tap to pause/resume">⏱ <span id="timer">00:00</span></span>
           <span class="pill">❌ <span id="mistakes">0</span></span>
+          <span class="pill" title="Best time this session">🏆 <span id="bestPill">—</span></span>
         </div>
 
         <div id="boardShell" class="boardShell">
@@ -140,7 +143,7 @@
       </div>
 
       <div id="win" class="card hide" style="margin-top:16px;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0">
-        🎉 Solved! Time: <span id="finalTime"></span> — Mistakes: <span id="finalMistakes"></span>
+        🎉 Solved! Time: <span id="finalTime"></span> — Mistakes: <span id="finalMistakes"></span> — Best: <span id="bestTime"></span>
       </div>
     </aside>
 
@@ -217,8 +220,13 @@ function solveFromGrid(grid){ const vals=toValues(grid); const s=vals.map(r=>r.s
 // ======================= State =======================
 const state={
   paused:false,
-  difficulty:'medium', grid:emptyGrid(), solution:null, selected:{r:0,c:0}, notesMode:false, mistakes:0, seconds:0, timer:null, activeDigit:0,
+  difficulty:'medium', grid:emptyGrid(), solution:null, selected:{r:0,c:0}, notesMode:false, mistakes:0, seconds:0, timer:null, activeDigit:0, bestSeconds:null,
 };
+
+// Best time helpers (sessionStorage per difficulty)
+const bestKey = (d)=>`sudoku_best_${d}`;
+function loadBest(d){ try{ const v=sessionStorage.getItem(bestKey(d)); return v?parseInt(v,10):null; }catch(e){ return null; } }
+function saveBest(d,sec){ try{ sessionStorage.setItem(bestKey(d), String(sec)); }catch(e){} }
 
 // ======================= DOM helpers =======================
 const elBoard = document.getElementById('board');
@@ -343,6 +351,8 @@ function renderPad(){
 function updateHeader(){
   elMistakes.textContent=state.mistakes;
   elDiffLabel.textContent=state.difficulty;
+  const elBestPill = document.getElementById('bestPill');
+  if(elBestPill){ elBestPill.textContent = state.bestSeconds==null ? '—' : prettyTime(state.bestSeconds); }
 }
 
 // ======================= Game logic wrappers =======================
@@ -354,13 +364,28 @@ function newGame(level=state.difficulty){
   state.mistakes=0; state.selected={r:0,c:0}; state.activeDigit=0;
   state.paused=false; pauseOverlay.classList.remove('show'); elBoardShell.classList.remove('hide'); padWrap.classList.remove('hide');
   clearInterval(state.timer); state.seconds=0; startTimer(); renderBoard(); renderPad(); elWin.classList.add('hide');
+  state.bestSeconds = loadBest(state.difficulty);
+  updateHeader();
 }
 
 function handleInput(n){ if(state.paused) return;
   const {r,c}=state.selected; const g=clone(state.grid); const cell=g[r][c];
   if(cell.given) return;
   if(state.notesMode){ if(n===0) cell.notes.clear(); else if(cell.notes.has(n)) cell.notes.delete(n); else cell.notes.add(n); }
-  else { cell.value=n; cell.notes.clear(); if(state.solution && n!==0 && n!==state.solution[r][c]) state.mistakes++; }
+  else {
+    cell.value=n; cell.notes.clear();
+    if(state.solution && n!==0){
+      if(n!==state.solution[r][c]) state.mistakes++; else {
+        // Correct entry: remove n from notes in same row/col/box
+        for(let cc=0; cc<9; cc++){ if(cc!==c) g[r][cc].notes.delete(n); }
+        for(let rr=0; rr<9; rr++){ if(rr!==r) g[rr][c].notes.delete(n); }
+        const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+        for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+          const rr=br+i, cc=bc+j; if(rr===r && cc===c) continue; g[rr][cc].notes.delete(n);
+        }
+      }
+    }
+  }
   state.grid=computeConflicts(g); state.activeDigit=state.grid[r][c].value||0; updateHeader(); renderBoard(); renderPad(); checkWin();
 }
 
@@ -373,6 +398,12 @@ function validateAndSolve(){ if(state.paused) return; const solved=solveFromGrid
 
 function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return; // not yet
   clearInterval(state.timer); elFinalTime.textContent=prettyTime(state.seconds); elFinalMistakes.textContent=state.mistakes; elWin.classList.remove('hide');
+  // Update best time
+  if(state.bestSeconds==null || state.seconds < state.bestSeconds){ state.bestSeconds = state.seconds; saveBest(state.difficulty, state.bestSeconds); }
+  const elBestPill = document.getElementById('bestPill');
+  const elBestTime = document.getElementById('bestTime');
+  if(elBestPill) elBestPill.textContent = prettyTime(state.bestSeconds);
+  if(elBestTime) elBestTime.textContent = prettyTime(state.bestSeconds);
   launchConfetti();
 }
 
