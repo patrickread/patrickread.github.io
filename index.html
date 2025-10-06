@@ -18,17 +18,7 @@
     h1{margin:0 0 8px;font-weight:700}
     .pills{display:flex;gap:8px;flex-wrap:wrap}
     .pill{background:#fff;border-radius:999px;padding:4px 10px;box-shadow:0 1px 3px rgba(2,8,23,.08)}
-    .pill button{all:unset;cursor:pointer}
-
-    /* Hamburger & Drawer */
-    .hamburger{position:fixed;top:12px;left:12px;z-index:40;background:#fff;border:none;border-radius:12px;padding:10px 12px;box-shadow:var(--shadow);cursor:pointer}
-    .hamburger .bar{display:block;width:26px;height:3px;background:#334155;margin:4px 0;border-radius:2px}
-    .drawer{position:fixed;top:0;left:0;height:100%;width:290px;background:#fff;box-shadow:0 20px 60px rgba(2,8,23,.26);transform:translateX(-100%);transition:transform .22s ease;z-index:35;display:flex;flex-direction:column}
-    .drawer.open{transform:translateX(0)}
-    .drawer .head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e5e7eb;font-weight:700}
-    .drawer .body{padding:14px 16px;display:grid;gap:10px}
-    .backdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);backdrop-filter:blur(1px);z-index:30;display:none}
-    .backdrop.show{display:block}
+    .pill.button{cursor:pointer}
 
     /* Board */
     .boardShell{padding:10px;background:#fff;border-radius:20px;box-shadow:var(--shadow)}
@@ -51,9 +41,11 @@
 
     .row{display:flex;gap:8px;flex-wrap:wrap}
 
-    /* Numpad – bigger, square touch targets */
+    /* Numpad – bigger, square touch targets with remaining counts */
     .pad{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-    .btn.num{aspect-ratio:1/1;height:64px;border-radius:16px;font-size:20px}
+    .btn.num{aspect-ratio:1/1;height:72px;border-radius:16px;font-size:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+    .btn.num .sub{font-size:12px;color:#64748b;line-height:1}
+    .btn.num:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.2)}
 
     .hide{display:none}
 
@@ -64,29 +56,29 @@
     /* Pause overlay */
     #pauseOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.6);color:#fff;z-index:65;font-size:28px;font-weight:800;text-align:center;padding:24px;}
     #pauseOverlay.show{display:flex}
+    #pauseOverlay .pauseModal{display:flex;flex-direction:column;align-items:center;gap:8px}
+    #pauseOverlay .pauseIcon{font-size:48px;line-height:1}
+    #pauseOverlay:active .pauseIcon{transform:scale(.96)}
     #pauseOverlay small{display:block;font-weight:600;opacity:.9;margin-top:8px}
-    #pauseOverlay .pauseModal {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-    }
-    #pauseOverlay .pauseIcon {
-      font-size: 48px;
-      line-height: 1;
-    }
-    #pauseOverlay:active .pauseIcon {
-      transform: scale(.96);
-    }
 
+    /* New Game modal */
+    #ngBackdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);backdrop-filter:blur(1px);z-index:70;display:none}
+    #ngBackdrop.show{display:block}
+    #ngModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:75}
+    #ngModal.show{display:flex}
+    .modalCard{width:min(420px,92vw);background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
+    .modalHead{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #e5e7eb;font-weight:700}
+    .modalBody{padding:14px;display:grid;gap:12px}
+    .xbtn{border:none;background:#f1f5f9;border-radius:8px;padding:6px 10px;cursor:pointer}
+    .modalActions{display:flex;gap:8px;justify-content:flex-end}
+    .select{padding:8px;border:1px solid #cbd5e1;border-radius:10px}
   </style>
 </head>
 <body>
 
 <!-- Confetti canvas -->
 <canvas id="confetti"></canvas>
-<!-- Pause overlay -->
-<!-- Pause overlay -->
+<!-- Pause overlay (tap to resume) -->
 <div id="pauseOverlay" role="button" aria-label="Resume (tap)">
   <div class="pauseModal">
     <div class="pauseIcon" aria-hidden="true">⏸️</div>
@@ -95,35 +87,6 @@
   </div>
 </div>
 
-<button id="hamburger" class="hamburger" aria-label="Toggle menu">
-  <span class="bar"></span>
-  <span class="bar"></span>
-  <span class="bar"></span>
-</button>
-<div id="backdrop" class="backdrop"></div>
-
-<!-- Slide-out drawer with New Game -->
-<aside id="drawer" class="drawer" aria-label="New game menu">
-  <div class="head">
-    <span>New Game</span>
-    <button id="closeDrawer" class="btn" style="padding:6px 10px;border-radius:8px;border:1px solid #e5e7eb;background:#f8fafc">Close</button>
-  </div>
-  <div class="body">
-    <label class="label" style="font-size:14px;color:var(--muted)">Difficulty</label>
-    <select id="difficulty" style="padding:8px;border:1px solid #cbd5e1;border-radius:10px">
-      <option value="easy">Easy</option>
-      <option value="medium" selected>Medium</option>
-      <option value="hard">Hard</option>
-    </select>
-    <div class="row">
-      <button id="startBtn" class="btn primary">Start</button>
-      <button data-new="easy" class="btn">Easy</button>
-      <button data-new="medium" class="btn">Medium</button>
-      <button data-new="hard" class="btn">Hard</button>
-    </div>
-  </div>
-</aside>
-
 <div class="wrap">
   <div class="app">
 
@@ -131,9 +94,10 @@
       <div class="card" style="display:flex;flex-direction:column;gap:12px;align-items:center">
         <h1>Sudoku</h1>
         <div class="pills">
-          <span class="pill">Difficulty: <b id="difficultyLabel" style="text-transform:capitalize;margin-left:6px">medium</b></span>
-          <!-- Timer pill toggles pause -->
-          <span id="timerPill" class="pill" style="cursor:pointer" title="Tap to pause/resume">⏱ <span id="timer">00:00</span></span>
+          <!-- Difficulty pill (tap to open New Game modal) -->
+          <span id="difficultyPill" class="pill button" title="Start a new game">Difficulty: <b id="difficultyLabel" style="text-transform:capitalize;margin-left:6px">medium</b></span>
+          <!-- Timer (tap to pause/resume) -->
+          <span id="timerPill" class="pill button" title="Tap to pause/resume">⏱ <span id="timer">00:00</span></span>
           <span class="pill">❌ <span id="mistakes">0</span></span>
         </div>
 
@@ -142,7 +106,7 @@
         </div>
 
         <div class="pad" style="max-width:420px;width:100%;margin-top:10px">
-          <!-- numpad 1..9 + erase -->
+          <!-- numpad 1..9 + erase (rendered by JS) -->
         </div>
       </div>
     </div>
@@ -151,7 +115,7 @@
       <div class="card controls">
         <button id="notesToggle" class="btn">Notes Mode (Off) ▧</button>
         <button id="autoNotes" class="btn">Auto Notes</button>
-        <button id="check" class="btn">Check Progress</button>
+        <!-- removed Check Progress -->
         <button id="hint" class="btn">Hint</button>
         <button id="solve" class="btn">Solve Board</button>
       </div>
@@ -170,6 +134,29 @@
       </div>
     </aside>
 
+  </div>
+</div>
+
+<!-- New Game modal -->
+<div id="ngBackdrop"></div>
+<div id="ngModal" role="dialog" aria-modal="true" aria-labelledby="ngTitle">
+  <div class="modalCard">
+    <div class="modalHead">
+      <span id="ngTitle">Start a new game?</span>
+      <button id="ngClose" class="xbtn" aria-label="Close">✕</button>
+    </div>
+    <div class="modalBody">
+      <label for="ngDifficulty" style="font-size:14px;color:var(--muted)">Select difficulty</label>
+      <select id="ngDifficulty" class="select">
+        <option value="easy">easy</option>
+        <option value="medium" selected>medium</option>
+        <option value="hard">hard</option>
+      </select>
+      <div class="modalActions">
+        <button id="ngCancel" class="btn">Cancel</button>
+        <button id="ngStart" class="btn primary">Start new game</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -229,21 +216,24 @@ const elBoardShell = document.getElementById('boardShell');
 const elMistakes = document.getElementById('mistakes');
 const elTimer = document.getElementById('timer');
 const elTimerPill = document.getElementById('timerPill');
-const elDiff = document.getElementById('difficulty');
+const elDiffPill = document.getElementById('difficultyPill');
+const elDiffSelectInModal = document.getElementById('ngDifficulty');
 const elDiffLabel = document.getElementById('difficultyLabel');
 const elWin = document.getElementById('win');
 const elFinalTime = document.getElementById('finalTime');
 const elFinalMistakes = document.getElementById('finalMistakes');
 const padWrap = document.querySelector('.pad');
 
-const drawer = document.getElementById('drawer');
-const backdrop = document.getElementById('backdrop');
-const hamburger = document.getElementById('hamburger');
-const closeDrawer = document.getElementById('closeDrawer');
-
 const confettiCanvas = document.getElementById('confetti');
 const cctx = confettiCanvas.getContext('2d');
 const pauseOverlay = document.getElementById('pauseOverlay');
+
+// New Game modal elements
+const ngBackdrop = document.getElementById('ngBackdrop');
+const ngModal = document.getElementById('ngModal');
+const ngClose = document.getElementById('ngClose');
+const ngCancel = document.getElementById('ngCancel');
+const ngStart = document.getElementById('ngStart');
 
 function prettyTime(sec){ const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return `${m}:${s}`; }
 
@@ -315,15 +305,28 @@ function renderBoard(){
   }
 }
 
+function remainingCounts(){
+  const counts = Array(10).fill(0); // 0..9
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+    const v = state.grid[r][c].value;
+    if(v>=1 && v<=9) counts[v]++;
+  }
+  const remaining = {};
+  for(let n=1;n<=9;n++) remaining[n] = 9 - counts[n];
+  return remaining;
+}
+
 function renderPad(){
+  const rem = remainingCounts();
   padWrap.innerHTML='';
   for(let n=1;n<=9;n++){
-    const b=document.createElement('button'); b.className='btn num'; b.textContent=n;
-    b.title = state.notesMode?`Toggle note ${n}`:`Place ${n}`;
+    const b=document.createElement('button'); b.className='btn num'; b.title = state.notesMode?`Toggle note ${n}`:`Place ${n}`;
+    b.innerHTML = `<div>${n}</div><div class="sub">${rem[n]}</div>`;
+    if(rem[n]===0) b.disabled = true;
     b.addEventListener('click',()=>handleInput(n));
     padWrap.appendChild(b);
   }
-  const er=document.createElement('button'); er.className='btn num'; er.textContent='Erase'; er.addEventListener('click',()=>handleInput(0));
+  const er=document.createElement('button'); er.className='btn num'; er.innerHTML='<div>Erase</div><div class="sub">&nbsp;</div>'; er.addEventListener('click',()=>handleInput(0));
   padWrap.appendChild(er);
 }
 
@@ -340,7 +343,7 @@ function newGame(level=state.difficulty){
   state.solution=solved; state.grid=computeConflicts(puzzle);
   state.mistakes=0; state.selected={r:0,c:0}; state.activeDigit=0;
   state.paused=false; pauseOverlay.classList.remove('show'); elBoardShell.classList.remove('hide'); padWrap.classList.remove('hide');
-  clearInterval(state.timer); state.seconds=0; startTimer(); renderBoard(); elWin.classList.add('hide');
+  clearInterval(state.timer); state.seconds=0; startTimer(); renderBoard(); renderPad(); elWin.classList.add('hide');
 }
 
 function handleInput(n){ if(state.paused) return;
@@ -348,18 +351,15 @@ function handleInput(n){ if(state.paused) return;
   if(cell.given) return;
   if(state.notesMode){ if(n===0) cell.notes.clear(); else if(cell.notes.has(n)) cell.notes.delete(n); else cell.notes.add(n); }
   else { cell.value=n; cell.notes.clear(); if(state.solution && n!==0 && n!==state.solution[r][c]) state.mistakes++; }
-  state.grid=computeConflicts(g); state.activeDigit=state.grid[r][c].value||0; updateHeader(); renderBoard(); checkWin();
+  state.grid=computeConflicts(g); state.activeDigit=state.grid[r][c].value||0; updateHeader(); renderBoard(); renderPad(); checkWin();
 }
 
-function giveHint(){ if(state.paused) return; if(!state.solution) return; const empty=findEmpty(state.grid); if(!empty) return; const {r,c}=empty; const g=clone(state.grid); g[r][c].value=state.solution[r][c]; g[r][c].notes.clear(); state.grid=computeConflicts(g); renderBoard(); checkWin(); }
+function giveHint(){ if(state.paused) return; if(!state.solution) return; const empty=findEmpty(state.grid); if(!empty) return; const {r,c}=empty; const g=clone(state.grid); g[r][c].value=state.solution[r][c]; g[r][c].notes.clear(); state.grid=computeConflicts(g); renderBoard(); renderPad(); checkWin(); }
 
-function autoNotes(){ if(state.paused) return; const g=clone(state.grid); const vals=toValues(g); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ const cell=g[r][c]; if(cell.value!==0){ cell.notes.clear(); continue;} const s=new Set(); for(let v=1;v<=9;v++) if(isSafe(vals,r,c,v)) s.add(v); cell.notes=s;} state.grid=computeConflicts(g); renderBoard(); }
-
-function checkBoard(){ if(state.paused) return; const wrong=[]; for(let r=0;r<9;r++) for(let c=0;c<9;c++){ const v=state.grid[r][c].value; if(v!==0 && v!==state.solution[r][c]) wrong.push({r,c}); }
-  alert(wrong.length===0? 'Looking good so far! ✅' : `You have ${wrong.length} mistake(s) highlighted in red.`); }
+function autoNotes(){ if(state.paused) return; const g=clone(state.grid); const vals=toValues(g); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ const cell=g[r][c]; if(cell.value!==0){ cell.notes.clear(); continue;} const s=new Set(); for(let v=1;v<=9;v++) if(isSafe(vals,r,c,v)) s.add(v); cell.notes=s;} state.grid=computeConflicts(g); renderBoard(); /* counts unchanged */ }
 
 function validateAndSolve(){ if(state.paused) return; const solved=solveFromGrid(state.grid); if(!solved){ alert('This grid has no solution (based on current entries).\nTry undoing some moves.'); return; }
-  const g=clone(state.grid); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ g[r][c].value=solved[r][c]; g[r][c].notes.clear(); } state.grid=computeConflicts(g); renderBoard(); checkWin(); }
+  const g=clone(state.grid); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ g[r][c].value=solved[r][c]; g[r][c].notes.clear(); } state.grid=computeConflicts(g); renderBoard(); renderPad(); checkWin(); }
 
 function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return; // not yet
   clearInterval(state.timer); elFinalTime.textContent=prettyTime(state.seconds); elFinalMistakes.textContent=state.mistakes; elWin.classList.remove('hide');
@@ -369,19 +369,12 @@ function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=
 // ======================= Events =======================
 renderPad();
 
-document.getElementById('startBtn').addEventListener('click',()=>{ newGame(state.difficulty); closeDrawer.click(); });
-for(const b of document.querySelectorAll('[data-new]')) b.addEventListener('click', (e)=> { newGame(e.target.getAttribute('data-new')); closeDrawer.click(); });
-
-document.getElementById('difficulty').addEventListener('change',(e)=>{ state.difficulty=e.target.value; elDiffLabel.textContent=state.difficulty; });
-
+// Notes toggle
 document.getElementById('notesToggle').addEventListener('click',()=>{ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; });
 
+// Other controls
 document.getElementById('autoNotes').addEventListener('click',autoNotes);
-
-document.getElementById('check').addEventListener('click',checkBoard);
-
 document.getElementById('hint').addEventListener('click',giveHint);
-
 document.getElementById('solve').addEventListener('click',validateAndSolve);
 
 // keyboard
@@ -395,20 +388,31 @@ window.addEventListener('keydown',(e)=>{
   if(e.key==='ArrowRight'){ state.selected={r:state.selected.r,c:(state.selected.c+1)%9}; renderBoard(); }
 });
 
-// Drawer
-function openDrawer(){ drawer.classList.add('open'); backdrop.classList.add('show'); }
-function closeDrawerFn(){ drawer.classList.remove('open'); backdrop.classList.remove('show'); }
-hamburger.addEventListener('click', openDrawer);
-backdrop.addEventListener('click', closeDrawerFn);
-closeDrawer.addEventListener('click', closeDrawerFn);
-
-// Pause toggle via timer pill
+// Pause toggle via timer pill + overlay
 function pauseGame(){ if(state.paused) return; state.paused=true; clearInterval(state.timer); pauseOverlay.classList.add('show'); elBoardShell.classList.add('hide'); padWrap.classList.add('hide'); }
 function resumeGame(){ if(!state.paused) return; state.paused=false; pauseOverlay.classList.remove('show'); elBoardShell.classList.remove('hide'); padWrap.classList.remove('hide'); startTimer(); }
 function togglePause(){ state.paused ? resumeGame() : pauseGame(); }
-elTimerPill.addEventListener('click', togglePause);
+document.getElementById('timerPill').addEventListener('click', togglePause);
 pauseOverlay.addEventListener('click', resumeGame);
 
+// New Game modal open (tap difficulty pill)
+elDiffPill.addEventListener('click', ()=>{
+  // preset select to current difficulty
+  elDiffSelectInModal.value = state.difficulty;
+  ngBackdrop.classList.add('show');
+  ngModal.classList.add('show');
+});
+// New Game modal close
+function closeNg(){ ngBackdrop.classList.remove('show'); ngModal.classList.remove('show'); }
+ngClose.addEventListener('click', closeNg);
+ngCancel.addEventListener('click', closeNg);
+ngBackdrop.addEventListener('click', closeNg);
+// New Game modal start
+ngStart.addEventListener('click', ()=>{
+  const level = elDiffSelectInModal.value;
+  newGame(level);
+  closeNg();
+});
 
 // boot
 newGame('easy');
