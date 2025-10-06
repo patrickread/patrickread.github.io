@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Match Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Memory Match Game</h1>
+
+        <!-- Game Setup Screen -->
+        <div id="game-setup">
+            <h2>Select Number of Players</h2>
+            <div class="player-selection">
+                <button class="player-btn" data-players="1">1 Player</button>
+                <button class="player-btn" data-players="2">2 Players</button>
+                <button class="player-btn" data-players="3">3 Players</button>
+                <button class="player-btn" data-players="4">4 Players</button>
+            </div>
+
+            <div id="player-types" class="hidden">
+                <h2>Player Types</h2>
+                <div id="player-type-controls">
+                    <!-- This will be populated dynamically -->
+                </div>
+            </div>
+
+            <div class="grid-size-selection">
+                <h2>Select Grid Size</h2>
+                <button class="grid-btn" data-size="4">4x4 (8 pairs)</button>
+                <button class="grid-btn" data-size="6">6x6 (18 pairs)</button>
+            </div>
+
+            <div class="special-options">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="enable-poop-cards">
+                    <span class="checkbox-text">Add poop cards (💩) to skip turns</span>
+                </label>
+            </div>
+
+            <button id="start-game" disabled>Start Game</button>
+        </div>
+
+        <!-- Game Board -->
+        <div id="game-board" class="hidden">
+            <div class="game-info">
+                <div id="current-player"></div>
+                <div id="scores"></div>
+            </div>
+            <div id="cards-grid"></div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over" class="hidden">
+            <h2>Game Over!</h2>
+            <div id="final-scores"></div>
+            <div id="winner"></div>
+            <button id="play-again">Play Again</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+</body>
+</html>
