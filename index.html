@@ -1,563 +1,369 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-
-// --------------------------- Utilities ---------------------------
-const range = (n) => [...Array(n).keys()];
-const clone = (grid) => grid.map((row) => row.map((c) => ({ ...c, notes: new Set(c.notes) })));
-const emptyGrid = () =>
-  range(9).map(() =>
-    range(9).map(() => ({ value: 0, given: false, notes: new Set(), conflict: false }))
-  );
-
-// Check if placing value at r,c is valid for current numeric grid
-function isSafe(gridVals, r, c, v) {
-  for (let i = 0; i < 9; i++) {
-    if (gridVals[r][i] === v || gridVals[i][c] === v) return false;
-  }
-  const br = Math.floor(r / 3) * 3;
-  const bc = Math.floor(c / 3) * 3;
-  for (let i = 0; i < 3; i++) {
-    for (let j = 0; j < 3; j++) {
-      if (gridVals[br + i][bc + j] === v) return false;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sudoku</title>
+  <style>
+    :root{
+      --bg:#f1f5f9; --panel:#fff; --ink:#0f172a; --muted:#64748b; --accent:#4f46e5; --ok:#059669; --danger:#dc2626; --amber:#fde68a;
+      --grid-gap:2px; --box-thick:3px; --radius:18px; --shadow:0 6px 20px rgba(2,8,23,.08);
     }
+    *{box-sizing:border-box}
+    body{margin:0;font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);} 
+    .wrap{min-height:100vh;display:grid;place-items:center;padding:24px}
+    .app{width:min(1100px,100%);display:grid;grid-template-columns:1fr 320px;gap:24px}
+    @media (max-width:900px){.app{grid-template-columns:1fr}}
+    .card{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+    h1{margin:0 0 8px;font-weight:700}
+    .pills{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{background:#fff;border-radius:999px;padding:4px 10px;box-shadow:0 1px 3px rgba(2,8,23,.08)}
+
+    /* Hamburger & Drawer */
+    .hamburger{position:fixed;top:12px;left:12px;z-index:40;background:#fff;border:none;border-radius:12px;padding:10px 12px;box-shadow:var(--shadow);cursor:pointer}
+    .hamburger .bar{display:block;width:26px;height:3px;background:#334155;margin:4px 0;border-radius:2px}
+    .drawer{position:fixed;top:0;left:0;height:100%;width:290px;background:#fff;box-shadow:0 20px 60px rgba(2,8,23,.26);transform:translateX(-100%);transition:transform .22s ease;z-index:35;display:flex;flex-direction:column}
+    .drawer.open{transform:translateX(0)}
+    .drawer .head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #e5e7eb;font-weight:700}
+    .drawer .body{padding:14px 16px;display:grid;gap:10px}
+    .backdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);backdrop-filter:blur(1px);z-index:30;display:none}
+    .backdrop.show{display:block}
+
+    /* Board */
+    .boardShell{padding:10px;background:#fff;border-radius:20px;box-shadow:var(--shadow)}
+    .board{display:grid;grid-template-columns:repeat(9,1fr);gap:var(--grid-gap);background:#cbd5e1;padding:var(--grid-gap);border-radius:14px}
+    .cell{position:relative;aspect-ratio:1/1;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:22px;border-radius:6px;user-select:none;transition:background .12s, outline-color .12s, transform .03s}
+    .cell.given{color:#0f172a;font-weight:800}
+    .cell.input{color:#4338ca}
+    .cell.sel{background:#eef2ff;outline:2px solid #6366f1}
+    .cell.match{background:var(--amber)}
+    .cell.wrong{outline:2px solid var(--danger); color:var(--danger)}
+    .cell.conflict{background:#fecaca}
+
+    .notes{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;padding:2px;color:#94a3b8;font-size:10px}
+    .note{display:flex;align-items:center;justify-content:center}
+
+    .controls .btn{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer}
+    .controls .btn:hover{background:#eef2f7}
+    .btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+    .kbd{padding:0 4px;border:1px solid #cbd5e1;border-radius:6px}
+
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+
+    /* Numpad – bigger, square touch targets */
+    .pad{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+    .btn.num{aspect-ratio:1/1;height:64px;border-radius:16px;font-size:20px}
+
+    .hide{display:none}
+
+    /* Confetti canvas */
+    #confetti{position:fixed;inset:0;pointer-events:none;z-index:60;display:none}
+    #confetti.show{display:block}
+  </style>
+</head>
+<body>
+
+<!-- Confetti canvas -->
+<canvas id="confetti"></canvas>
+
+<button id="hamburger" class="hamburger" aria-label="Toggle menu">
+  <span class="bar"></span>
+  <span class="bar"></span>
+  <span class="bar"></span>
+</button>
+<div id="backdrop" class="backdrop"></div>
+
+<!-- Slide-out drawer with New Game -->
+<aside id="drawer" class="drawer" aria-label="New game menu">
+  <div class="head">
+    <span>New Game</span>
+    <button id="closeDrawer" class="btn" style="padding:6px 10px;border-radius:8px;border:1px solid #e5e7eb;background:#f8fafc">Close</button>
+  </div>
+  <div class="body">
+    <label class="label" style="font-size:14px;color:var(--muted)">Difficulty</label>
+    <select id="difficulty" style="padding:8px;border:1px solid #cbd5e1;border-radius:10px">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+    <div class="row">
+      <button id="startBtn" class="btn primary">Start</button>
+      <button data-new="easy" class="btn">Easy</button>
+      <button data-new="medium" class="btn">Medium</button>
+      <button data-new="hard" class="btn">Hard</button>
+    </div>
+  </div>
+</aside>
+
+<div id="backdrop2" class="backdrop"></div>
+
+<div class="wrap">
+  <div class="app">
+
+    <div class="left">
+      <div class="card" style="display:flex;flex-direction:column;gap:12px;align-items:center">
+        <h1>Sudoku</h1>
+        <div class="pills">
+          <span class="pill">Difficulty: <b id="difficultyLabel" style="text-transform:capitalize;margin-left:6px">medium</b></span>
+          <span class="pill">⏱ <span id="timer">00:00</span></span>
+          <span class="pill">❌ <span id="mistakes">0</span></span>
+        </div>
+
+        <div class="boardShell">
+          <div id="board" class="board" aria-label="Sudoku board"></div>
+        </div>
+
+        <div class="pad" style="max-width:420px;width:100%;margin-top:10px">
+          <!-- numpad 1..9 + erase -->
+        </div>
+      </div>
+    </div>
+
+    <aside class="right">
+      <div class="card controls">
+        <button id="notesToggle" class="btn">Notes Mode (Off) ▧</button>
+        <button id="autoNotes" class="btn">Auto Notes</button>
+        <button id="check" class="btn">Check Progress</button>
+        <button id="hint" class="btn">Hint</button>
+        <button id="solve" class="btn">Solve Board</button>
+      </div>
+
+      <div class="card" style="margin-top:16px;color:var(--muted);font-size:14px">
+        <p style="font-weight:700;margin:0 0 6px">Tips</p>
+        <ul style="margin:0 0 0 18px;padding:0;display:grid;gap:4px">
+          <li>Click a cell, then use 1–9 to fill. Use Erase (or Delete) to clear.</li>
+          <li>Press <span class="kbd">N</span> to toggle notes mode.</li>
+          <li>Arrow keys move selection. Hints fill one random empty cell.</li>
+        </ul>
+      </div>
+
+      <div id="win" class="card hide" style="margin-top:16px;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0">
+        🎉 Solved! Time: <span id="finalTime"></span> — Mistakes: <span id="finalMistakes"></span>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<script>
+// ======================= Utilities =======================
+const range = (n) => [...Array(n).keys()];
+const clone = (grid) => grid.map(row => row.map(c => ({...c, notes:new Set(c.notes)})));
+const emptyGrid = () => range(9).map(()=>range(9).map(()=>({value:0,given:false,notes:new Set(),conflict:false})));
+
+function isSafe(vals,r,c,v){
+  for(let i=0;i<9;i++){ if(vals[r][i]===v || vals[i][c]===v) return false; }
+  const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){ if(vals[br+i][bc+j]===v) return false; }
+  return true;
+}
+function shuffled(a){ a=[...a]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; }
+function solve(vals){
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(vals[r][c]===0){
+    for(const v of shuffled([1,2,3,4,5,6,7,8,9])) if(isSafe(vals,r,c,v)){ vals[r][c]=v; if(solve(vals)) return true; vals[r][c]=0; }
+    return false;
   }
   return true;
 }
+function countSolutions(vals,limit=2){ let count=0; (function bt(){
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(vals[r][c]===0){
+    for(let v=1;v<=9;v++) if(isSafe(vals,r,c,v)){ vals[r][c]=v; bt(); if(count>=limit) return; vals[r][c]=0; }
+    return; }
+  count++; })(); return Math.min(count,limit); }
+function generateSolvedBoard(){ const v=range(9).map(()=>range(9).map(()=>0));
+  const first=shuffled([1,2,3,4,5,6,7,8,9]); for(let c=0;c<9;c++) v[0][c]=first[c]; solve(v); return v; }
+function makePuzzleFromSolution(solution,difficulty){
+  const vals=solution.map(r=>r.slice()); const targets={easy:[40,45],medium:[32,36],hard:[26,30]};
+  const [minCl,maxCl]=targets[difficulty]||targets.medium; const target=Math.floor((minCl+maxCl)/2);
+  const order=shuffled(range(81)); let clues=81; for(const idx of order){ if(clues<=target) break; const r=Math.floor(idx/9), c=idx%9; const prev=vals[r][c]; if(prev===0) continue; vals[r][c]=0; const copy=vals.map(row=>row.slice()); const sol=countSolutions(copy,2); if(sol!==1) vals[r][c]=prev; else clues--; }
+  return vals.map(row=>row.map(v=>({value:v,given:v!==0,notes:new Set(),conflict:false})));
+}
+function toValues(grid){ return grid.map(row=>row.map(c=>c.value||0)); }
+function computeConflicts(grid){
+  const vals=toValues(grid); const bad=new Set();
+  for(let r=0;r<9;r++){ const seen=new Map(); for(let c=0;c<9;c++){ const v=vals[r][c]; if(!v) continue; const k=`r${r}#${v}`; if(seen.has(k)){ bad.add(`${r},${c}`); bad.add(`${r},${seen.get(k)}`); } else seen.set(k,c);} }
+  for(let c=0;c<9;c++){ const seen=new Map(); for(let r=0;r<9;r++){ const v=vals[r][c]; if(!v) continue; const k=`c${c}#${v}`; if(seen.has(k)){ bad.add(`${r},${c}`); bad.add(`${seen.get(k)},${c}`);} else seen.set(k,r);} }
+  for(let br=0;br<3;br++) for(let bc=0;bc<3;bc++){ const seen=new Map(); for(let i=0;i<3;i++) for(let j=0;j<3;j++){ const r=br*3+i, c=bc*3+j, v=vals[r][c]; if(!v) continue; const k=`b${br}${bc}#${v}`; if(seen.has(k)){ bad.add(`${r},${c}`); const p=seen.get(k); bad.add(`${p.r},${p.c}`);} else seen.set(k,{r,c}); }}
+  return grid.map((row,r)=>row.map((cell,c)=>({...cell, conflict:bad.has(`${r},${c}`)})));
+}
+function findEmpty(grid){ for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(grid[r][c].value===0) return {r,c}; return null; }
+function solveFromGrid(grid){ const vals=toValues(grid); const s=vals.map(r=>r.slice()); return solve(s)?s:null; }
 
-function shuffled(nums) {
-  const a = [...nums];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+// ======================= State =======================
+const state={
+  difficulty:'medium', grid:emptyGrid(), solution:null, selected:{r:0,c:0}, notesMode:false, mistakes:0, seconds:0, timer:null, activeDigit:0,
+};
+
+// ======================= DOM helpers =======================
+const elBoard = document.getElementById('board');
+const elMistakes = document.getElementById('mistakes');
+const elTimer = document.getElementById('timer');
+const elDiff = document.getElementById('difficulty');
+const elDiffLabel = document.getElementById('difficultyLabel');
+const elWin = document.getElementById('win');
+const elFinalTime = document.getElementById('finalTime');
+const elFinalMistakes = document.getElementById('finalMistakes');
+const padWrap = document.querySelector('.pad');
+
+const drawer = document.getElementById('drawer');
+const backdrop = document.getElementById('backdrop');
+const hamburger = document.getElementById('hamburger');
+const closeDrawer = document.getElementById('closeDrawer');
+
+const confettiCanvas = document.getElementById('confetti');
+const cctx = confettiCanvas.getContext('2d');
+
+function prettyTime(sec){ const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return `${m}:${s}`; }
+
+function startTimer(){ if(state.timer) clearInterval(state.timer); state.seconds=0; elTimer.textContent=prettyTime(0); state.timer=setInterval(()=>{ state.seconds++; elTimer.textContent=prettyTime(state.seconds); },1000); }
+
+// ======================= Confetti =======================
+function launchConfetti(duration=2500){
+  const W = confettiCanvas.width = window.innerWidth;
+  const H = confettiCanvas.height = window.innerHeight;
+  const colors = ['#f59e0b','#10b981','#3b82f6','#ef4444','#a855f7','#f97316'];
+  const N = 180;
+  const parts = Array.from({length:N},()=>({
+    x: Math.random()*W,
+    y: -Math.random()*H,
+    vx: (Math.random()-0.5)*2,
+    vy: 2 + Math.random()*3,
+    size: 4 + Math.random()*6,
+    rot: Math.random()*Math.PI*2,
+    vr: (Math.random()-0.5)*0.2,
+    color: colors[(Math.random()*colors.length)|0]
+  }));
+  let raf, start;
+  confettiCanvas.classList.add('show');
+  function step(t){
+    if(!start) start=t; const dt=t-start; cctx.clearRect(0,0,W,H);
+    parts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr; if(p.y>H){p.y=-10; p.x=Math.random()*W;} cctx.save(); cctx.translate(p.x,p.y); cctx.rotate(p.rot); cctx.fillStyle=p.color; cctx.fillRect(-p.size/2,-p.size/2,p.size,p.size); cctx.restore(); });
+    if(dt < duration) raf=requestAnimationFrame(step); else { confettiCanvas.classList.remove('show'); cancelAnimationFrame(raf); }
   }
-  return a;
+  raf=requestAnimationFrame(step);
 }
 
-// Backtracking solver that fills grid in-place, returns boolean
-function solve(gridVals) {
-  for (let r = 0; r < 9; r++) {
-    for (let c = 0; c < 9; c++) {
-      if (gridVals[r][c] === 0) {
-        for (const v of shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9])) {
-          if (isSafe(gridVals, r, c, v)) {
-            gridVals[r][c] = v;
-            if (solve(gridVals)) return true;
-            gridVals[r][c] = 0;
-          }
-        }
-        return false; // no value works
+// ======================= Rendering =======================
+function renderBoard(){
+  elBoard.innerHTML='';
+  for(let r=0;r<9;r++){
+    for(let c=0;c<9;c++){
+      const cell=state.grid[r][c];
+      const d=document.createElement('div'); d.className='cell';
+      if(cell.given) d.classList.add('given'); else d.classList.add('input');
+      const isSel=state.selected.r===r && state.selected.c===c;
+      if(isSel) d.classList.add('sel');
+      const isWrong = !cell.given && cell.value!==0 && state.solution && cell.value !== state.solution[r][c];
+      if(isWrong) d.classList.add('wrong');
+      const sameAsSelected = state.activeDigit!==0 && cell.value===state.activeDigit;
+      if(sameAsSelected && !isSel) d.classList.add('match');
+      if(cell.conflict) d.classList.add('conflict');
+
+      // borders for boxes
+      const thickRight=((c+1)%3===0 && c!==8), thickBottom=((r+1)%3===0 && r!==8);
+      if(thickRight) d.style.borderRight=`var(--box-thick) solid #cbd5e1`;
+      if(thickBottom) d.style.borderBottom=`var(--box-thick) solid #cbd5e1`;
+
+      d.tabIndex=0; d.setAttribute('role','button'); d.setAttribute('aria-label',`r${r+1} c${c+1}`);
+      d.addEventListener('click',()=>{ state.selected={r,c}; state.activeDigit=state.grid[r][c].value||0; renderBoard(); });
+
+      if(cell.value!==0){ d.textContent=cell.value; }
+      else{
+        const notes=document.createElement('div'); notes.className='notes';
+        for(let n=1;n<=9;n++){ const s=document.createElement('div'); s.className='note'; s.textContent=cell.notes.has(n)?n:''; notes.appendChild(s);} 
+        d.appendChild(notes);
       }
+      elBoard.appendChild(d);
     }
   }
-  return true; // solved
 }
 
-// Count number of solutions up to 2 (for uniqueness check). Returns 0,1,2.
-function countSolutions(gridVals, limit = 2) {
-  let count = 0;
-  function backtrack() {
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        if (gridVals[r][c] === 0) {
-          for (let v = 1; v <= 9; v++) {
-            if (isSafe(gridVals, r, c, v)) {
-              gridVals[r][c] = v;
-              backtrack();
-              if (count >= limit) return; // early stop
-              gridVals[r][c] = 0;
-            }
-          }
-          return; // no value fits
-        }
-      }
-    }
-    count++;
+function renderPad(){
+  padWrap.innerHTML='';
+  for(let n=1;n<=9;n++){
+    const b=document.createElement('button'); b.className='btn num'; b.textContent=n;
+    b.title = state.notesMode?`Toggle note ${n}`:`Place ${n}`;
+    b.addEventListener('click',()=>handleInput(n));
+    padWrap.appendChild(b);
   }
-  backtrack();
-  return Math.min(count, limit);
+  const er=document.createElement('button'); er.className='btn num'; er.textContent='Erase'; er.addEventListener('click',()=>handleInput(0));
+  padWrap.appendChild(er);
 }
 
-// Generate a fully solved valid Sudoku board
-function generateSolvedBoard() {
-  const gridVals = range(9).map(() => range(9).map(() => 0));
-
-  // Seed first row with shuffled 1..9 for variety
-  const firstRow = shuffled([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-  for (let c = 0; c < 9; c++) gridVals[0][c] = firstRow[c];
-
-  solve(gridVals);
-  return gridVals;
+function updateHeader(){
+  elMistakes.textContent=state.mistakes;
+  elDiffLabel.textContent=state.difficulty;
 }
 
-// Create a puzzle by removing cells while ensuring unique solution.
-function makePuzzleFromSolution(solutionVals, difficulty) {
-  const gridVals = solutionVals.map((row) => row.slice());
+// ======================= Game logic wrappers =======================
+function newGame(level=state.difficulty){
+  state.difficulty=level; updateHeader();
+  const solved=generateSolvedBoard();
+  const puzzle=makePuzzleFromSolution(solved, level);
+  state.solution=solved; state.grid=computeConflicts(puzzle);
+  state.mistakes=0; state.selected={r:0,c:0}; state.activeDigit=0; startTimer(); renderBoard(); elWin.classList.add('hide'); }
 
-  // Target clues per difficulty
-  const targets = {
-    easy: [40, 45],
-    medium: [32, 36],
-    hard: [26, 30],
-  };
-  const [minClues, maxClues] = targets[difficulty] || targets.medium;
-  const target = Math.floor((minClues + maxClues) / 2);
-
-  // Order of cell indices to try removing (shuffled)
-  const order = shuffled(range(81));
-  let removed = 0;
-  let clues = 81;
-  for (const idx of order) {
-    if (clues <= target) break;
-    const r = Math.floor(idx / 9);
-    const c = idx % 9;
-    const prev = gridVals[r][c];
-    if (prev === 0) continue;
-
-    gridVals[r][c] = 0;
-    const copy = gridVals.map((row) => row.slice());
-    const solutions = countSolutions(copy, 2);
-    if (solutions !== 1) {
-      // revert to keep uniqueness
-      gridVals[r][c] = prev;
-    } else {
-      removed++;
-      clues--;
-    }
-  }
-
-  // Convert to cell objects
-  const puzzle = gridVals.map((row, r) =>
-    row.map((v, c) => ({ value: v, given: v !== 0, notes: new Set(), conflict: false }))
-  );
-  // Fill given values from solution where zero in puzzle should remain empty but keep track of solution separately
-  return puzzle;
+function handleInput(n){
+  const {r,c}=state.selected; const g=clone(state.grid); const cell=g[r][c];
+  if(cell.given) return;
+  if(state.notesMode){ if(n===0) cell.notes.clear(); else if(cell.notes.has(n)) cell.notes.delete(n); else cell.notes.add(n); }
+  else { cell.value=n; cell.notes.clear(); if(state.solution && n!==0 && n!==state.solution[r][c]) state.mistakes++; }
+  state.grid=computeConflicts(g); state.activeDigit=state.grid[r][c].value||0; updateHeader(); renderBoard(); checkWin();
 }
 
-function toValues(grid) {
-  return grid.map((row) => row.map((c) => c.value || 0));
+function giveHint(){ if(!state.solution) return; const empty=findEmpty(state.grid); if(!empty) return; const {r,c}=empty; const g=clone(state.grid); g[r][c].value=state.solution[r][c]; g[r][c].notes.clear(); state.grid=computeConflicts(g); renderBoard(); checkWin(); }
+
+function autoNotes(){ const g=clone(state.grid); const vals=toValues(g); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ const cell=g[r][c]; if(cell.value!==0){ cell.notes.clear(); continue;} const s=new Set(); for(let v=1;v<=9;v++) if(isSafe(vals,r,c,v)) s.add(v); cell.notes=s;} state.grid=computeConflicts(g); renderBoard(); }
+
+function checkBoard(){ const wrong=[]; for(let r=0;r<9;r++) for(let c=0;c<9;c++){ const v=state.grid[r][c].value; if(v!==0 && v!==state.solution[r][c]) wrong.push({r,c}); }
+  alert(wrong.length===0? 'Looking good so far! ✅' : `You have ${wrong.length} mistake(s) highlighted in red.`); }
+
+function validateAndSolve(){ const solved=solveFromGrid(state.grid); if(!solved){ alert('This grid has no solution (based on current entries).\nTry undoing some moves.'); return; }
+  const g=clone(state.grid); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ g[r][c].value=solved[r][c]; g[r][c].notes.clear(); } state.grid=computeConflicts(g); renderBoard(); checkWin(); }
+
+function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return; // not yet
+  clearInterval(state.timer); elFinalTime.textContent=prettyTime(state.seconds); elFinalMistakes.textContent=state.mistakes; elWin.classList.remove('hide');
+  launchConfetti();
 }
 
-function computeConflicts(grid) {
-  const vals = toValues(grid);
-  const conflicts = new Set(); // keys as "r,c"
+// ======================= Events =======================
+renderPad();
 
-  // rows
-  for (let r = 0; r < 9; r++) {
-    const seen = new Map();
-    for (let c = 0; c < 9; c++) {
-      const v = vals[r][c];
-      if (v === 0) continue;
-      const key = `r${r}#${v}`;
-      if (seen.has(key)) {
-        conflicts.add(`${r},${c}`);
-        conflicts.add(`${r},${seen.get(key)}`);
-      } else seen.set(key, c);
-    }
-  }
-  // cols
-  for (let c = 0; c < 9; c++) {
-    const seen = new Map();
-    for (let r = 0; r < 9; r++) {
-      const v = vals[r][c];
-      if (v === 0) continue;
-      const key = `c${c}#${v}`;
-      if (seen.has(key)) {
-        conflicts.add(`${r},${c}`);
-        conflicts.add(`${seen.get(key)},${c}`);
-      } else seen.set(key, r);
-    }
-  }
-  // boxes
-  for (let br = 0; br < 3; br++) {
-    for (let bc = 0; bc < 3; bc++) {
-      const seen = new Map();
-      for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) {
-          const r = br * 3 + i;
-          const c = bc * 3 + j;
-          const v = vals[r][c];
-          if (v === 0) continue;
-          const key = `b${br}${bc}#${v}`;
-          if (seen.has(key)) {
-            conflicts.add(`${r},${c}`);
-            const prev = seen.get(key);
-            conflicts.add(`${prev.r},${prev.c}`);
-          } else seen.set(key, { r, c });
-        }
-      }
-    }
-  }
+document.getElementById('startBtn').addEventListener('click',()=>{ newGame(state.difficulty); closeDrawer.click(); });
+for(const b of document.querySelectorAll('[data-new]')) b.addEventListener('click', (e)=> { newGame(e.target.getAttribute('data-new')); closeDrawer.click(); });
 
-  return grid.map((row, r) =>
-    row.map((cell, c) => ({ ...cell, conflict: conflicts.has(`${r},${c}`) }))
-  );
-}
+document.getElementById('difficulty').addEventListener('change',(e)=>{ state.difficulty=e.target.value; elDiffLabel.textContent=state.difficulty; });
 
-function findEmpty(grid) {
-  for (let r = 0; r < 9; r++) {
-    for (let c = 0; c < 9; c++) {
-      if (grid[r][c].value === 0) return { r, c };
-    }
-  }
-  return null;
-}
+document.getElementById('notesToggle').addEventListener('click',()=>{ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; });
 
-function solveFromGrid(grid) {
-  const vals = toValues(grid);
-  const solved = vals.map((row) => row.slice());
-  const ok = solve(solved);
-  return ok ? solved : null;
-}
+document.getElementById('autoNotes').addEventListener('click',autoNotes);
 
-// --------------------------- React UI ---------------------------
-function Confetti({show,duration=3000}){
-  const ref=useRef(null);
-  useEffect(()=>{
-    if(!show) return; const canvas=ref.current; if(!canvas) return; const ctx=canvas.getContext('2d');
-    let w=canvas.width=window.innerWidth, h=canvas.height=window.innerHeight; const onResize=()=>{w=canvas.width=window.innerWidth; h=canvas.height=window.innerHeight;};
-    window.addEventListener('resize',onResize);
-    const colors=['#f59e0b','#10b981','#3b82f6','#ef4444','#a855f7','#f97316'];
-    const N=160; const parts=[...Array(N)].map(()=>({
-      x:Math.random()*w,y:-10*Math.random()*h,vx:(Math.random()-0.5)*2,vy:2+Math.random()*3,
-      size:4+Math.random()*4,rot:Math.random()*Math.PI*2,vr:(Math.random()-0.5)*0.2,color:colors[(Math.random()*colors.length)|0]
-    }));
-    let raf; const start=performance.now();
-    const loop=(t)=>{ const dt=16/1000; ctx.clearRect(0,0,w,h);
-      parts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr; if(p.y>h){p.y=-10; p.x=Math.random()*w;} ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.color; ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size); ctx.restore(); });
-      if(t-start<duration) raf=requestAnimationFrame(loop); };
-    raf=requestAnimationFrame(loop);
-    return ()=>{cancelAnimationFrame(raf); window.removeEventListener('resize',onResize);};
-  },[show,duration]);
-  return <canvas ref={ref} className={"pointer-events-none fixed inset-0 z-50 "+(show?"":"hidden")} />
-}
+document.getElementById('check').addEventListener('click',checkBoard);
 
-export default function SudokuApp() {
-  const [difficulty, setDifficulty] = useState("medium");
-  const [grid, setGrid] = useState(emptyGrid());
-  const [solution, setSolution] = useState(null); // 9x9 numbers
-  const [selected, setSelected] = useState({ r: 0, c: 0 });
-  const [notesMode, setNotesMode] = useState(false);
-  const [mistakes, setMistakes] = useState(0);
-  const [seconds, setSeconds] = useState(0);
-  const timerRef = useRef(null);
-  const [navOpen,setNavOpen]=useState(false);
-  const [showConfetti,setShowConfetti]=useState(false);
-  const [activeDigit, setActiveDigit] = useState(0);
-  useEffect(() => {
-    const r = selected?.r ?? 0;
-    const c = selected?.c ?? 0;
-    const v = (grid?.[r]?.[c]?.value) || 0;
-    setActiveDigit(v);
-  }, [selected, grid]);
+document.getElementById('hint').addEventListener('click',giveHint);
 
-  // value of the currently selected cell (for same-number highlighting)
-  const selectedValue = useMemo(() => {
-    const r = selected?.r ?? 0;
-    const c = selected?.c ?? 0;
-    try { return grid?.[r]?.[c]?.value || 0; } catch { return 0; }
-  }, [grid, selected]);
+document.getElementById('solve').addEventListener('click',validateAndSolve);
 
-  const isComplete = useMemo(() => {
-    if (!solution) return false;
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        if (grid[r][c].value !== solution[r][c]) return false;
-      }
-    }
-    return true;
-  }, [grid, solution]);
+// keyboard
+window.addEventListener('keydown',(e)=>{
+  if(e.key>='1' && e.key<='9') handleInput(parseInt(e.key,10));
+  if(['0','Backspace','Delete'].includes(e.key)) handleInput(0);
+  if(e.key==='n' || e.key==='N'){ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; }
+  if(e.key==='ArrowUp'){ state.selected={r:(state.selected.r+8)%9,c:state.selected.c}; renderBoard(); }
+  if(e.key==='ArrowDown'){ state.selected={r:(state.selected.r+1)%9,c:state.selected.c}; renderBoard(); }
+  if(e.key==='ArrowLeft'){ state.selected={r:state.selected.r,c:(state.selected.c+8)%9}; renderBoard(); }
+  if(e.key==='ArrowRight'){ state.selected={r:state.selected.r,c:(state.selected.c+1)%9}; renderBoard(); }
+});
 
-  // fire confetti when completed
-  useEffect(()=>{ if(isComplete){ setShowConfetti(true); const t=setTimeout(()=>setShowConfetti(false), 3000); return ()=>clearTimeout(t);} },[isComplete]);
+// Drawer events
+function openDrawer(){ drawer.classList.add('open'); backdrop.classList.add('show'); }
+function closeDrawerFn(){ drawer.classList.remove('open'); backdrop.classList.remove('show'); }
+hamburger.addEventListener('click', openDrawer);
+backdrop.addEventListener('click', closeDrawerFn);
+closeDrawer.addEventListener('click', closeDrawerFn);
 
-  function newGame(level = difficulty) {
-    // Generate fresh solution and puzzle
-    const solved = generateSolvedBoard();
-    const puzzle = makePuzzleFromSolution(solved, level);
-
-    // Save solution separately
-    setSolution(solved);
-    setGrid(computeConflicts(puzzle));
-    setDifficulty(level);
-    setMistakes(0);
-    setSeconds(0);
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-  }
-
-  useEffect(() => {
-    newGame("easy");
-    return () => timerRef.current && clearInterval(timerRef.current);
-  }, []);
-
-  function handleInput(n) {
-    setGrid((prev) => {
-      const g = clone(prev);
-      const { r, c } = selected;
-      const cell = g[r][c];
-      if (cell.given) return prev; // immutable
-      if (notesMode) {
-        if (n === 0) {
-          cell.notes.clear();
-        } else if (cell.notes.has(n)) cell.notes.delete(n);
-        else cell.notes.add(n);
-      } else {
-        cell.value = n;
-        cell.notes.clear();
-        if (solution && n !== 0 && n !== solution[r][c]) {
-          setMistakes((m) => m + 1);
-        }
-      }
-      return computeConflicts(g);
-    });
-  }
-
-  function eraseCell() {
-    handleInput(0);
-  }
-
-  function giveHint() {
-    if (!solution) return;
-    const empty = findEmpty(grid);
-    if (!empty) return;
-    const { r, c } = empty;
-    setGrid((prev) => {
-      const g = clone(prev);
-      g[r][c].value = solution[r][c];
-      g[r][c].notes.clear();
-      return computeConflicts(g);
-    });
-  }
-
-  function autoNotes() {
-    setGrid((prev) => {
-      const g = clone(prev);
-      const vals = toValues(g);
-      for (let r = 0; r < 9; r++) {
-        for (let c = 0; c < 9; c++) {
-          const cell = g[r][c];
-          if (cell.value !== 0) {
-            cell.notes.clear();
-            continue;
-          }
-          const s = new Set();
-          for (let v = 1; v <= 9; v++) if (isSafe(vals, r, c, v)) s.add(v);
-          cell.notes = s;
-        }
-      }
-      return computeConflicts(g);
-    });
-  }
-
-  function checkBoard() {
-    if (!solution) return;
-    const wrong = [];
-    for (let r = 0; r < 9; r++) {
-      for (let c = 0; c < 9; c++) {
-        const v = grid[r][c].value;
-        if (v !== 0 && v !== solution[r][c]) wrong.push({ r, c });
-      }
-    }
-    if (wrong.length === 0) alert("Looking good so far! ✅");
-    else alert(`You have ${wrong.length} mistake(s) highlighted in red.`);
-  }
-
-  function validateAndSolve() {
-    const solved = solveFromGrid(grid);
-    if (!solved) {
-      alert("This grid has no solution (based on current entries).\nTry undoing some moves.");
-      return;
-    }
-    setGrid((prev) => {
-      const g = clone(prev);
-      for (let r = 0; r < 9; r++) for (let c = 0; c < 9; c++) {
-        g[r][c].value = solved[r][c];
-        g[r][c].notes.clear();
-      }
-      return computeConflicts(g);
-    });
-  }
-
-  const prettyTime = useMemo(() => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
-    const s = (seconds % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  }, [seconds]);
-
-  // Keyboard controls
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key >= "1" && e.key <= "9") handleInput(parseInt(e.key, 10));
-      if (e.key === "0" || e.key === "Backspace" || e.key === "Delete") handleInput(0);
-      if (e.key === "n" || e.key === "N") setNotesMode((m) => !m);
-      if (e.key === "ArrowUp") setSelected((s) => ({ r: (s.r + 8) % 9, c: s.c }));
-      if (e.key === "ArrowDown") setSelected((s) => ({ r: (s.r + 1) % 9, c: s.c }));
-      if (e.key === "ArrowLeft") setSelected((s) => ({ r: s.r, c: (s.c + 8) % 9 }));
-      if (e.key === "ArrowRight") setSelected((s) => ({ r: s.r, c: (s.c + 1) % 9 }));
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selected, notesMode, grid, solution]);
-
-  // --------------------------- Render ---------------------------
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-slate-100 p-6">
-      <Confetti show={showConfetti} />
-      {/* Hamburger */}
-      <button onClick={()=>setNavOpen(v=>!v)} className="fixed top-4 left-4 z-40 bg-white shadow rounded-xl px-3 py-2 active:scale-[0.98] md:hidden">
-        <span className="block w-6 h-0.5 bg-slate-700 mb-1"></span>
-        <span className="block w-6 h-0.5 bg-slate-700 mb-1"></span>
-        <span className="block w-6 h-0.5 bg-slate-700"></span>
-      </button>
-
-      {/* Slide-out New Game menu */}
-      <div className={["fixed z-30 top-0 left-0 h-full w-72 bg-white shadow-xl transition-transform", navOpen?"translate-x-0":"-translate-x-full"].join(" ")}>
-        <div className="p-4 border-b flex items-center justify-between">
-          <span className="font-semibold">New Game</span>
-          <button onClick={()=>setNavOpen(false)} className="px-2 py-1 rounded-md bg-slate-100">Close</button>
-        </div>
-        <div className="p-4 space-y-3">
-          <label className="text-sm text-slate-600">Difficulty</label>
-          <select className="w-full px-2 py-2 border rounded-md" value={difficulty} onChange={(e)=>setDifficulty(e.target.value)}>
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </select>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={()=>newGame(difficulty)} className="px-3 py-3 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Start</button>
-            <button onClick={()=>newGame('easy')} className="px-3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200">Easy</button>
-            <button onClick={()=>newGame('medium')} className="px-3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200">Medium</button>
-            <button onClick={()=>newGame('hard')} className="px-3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200">Hard</button>
-          </div>
-        </div>
-      </div>
-      <div className="w-full max-w-5xl grid md:grid-cols-[1fr_320px] gap-6">
-        {/* Left: Board */}
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-full flex items-center justify-between">
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Sudoku</h1>
-            {/* Desktop toggle for menu */}
-            <button onClick={()=>setNavOpen(v=>!v)} className="hidden md:inline-flex items-center gap-2 bg-white shadow px-3 py-2 rounded-xl">
-              <span className="w-5 h-0.5 bg-slate-700 relative before:content-[''] before:block before:w-5 before:h-0.5 before:bg-slate-700 before:translate-y-[-6px] after:content-[''] after:block after:w-5 after:h-0.5 after:bg-slate-700 after:translate-y-[6px]"></span>
-              Menu
-            </button>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="px-2 py-1 rounded-full bg-white shadow">Difficulty: <b className="capitalize">{difficulty}</b></span>
-            <span className="px-2 py-1 rounded-full bg-white shadow">⏱ {prettyTime}</span>
-            <span className="px-2 py-1 rounded-full bg-white shadow">❌ {mistakes}</span>
-          </div>
-
-          {/* Sudoku Grid */}
-          <div className="bg-white p-2 rounded-2xl shadow-lg">
-            <div className="grid grid-cols-9 gap-[2px] bg-slate-300 p-[2px] rounded-xl">
-              {range(9).map((r) =>
-                range(9).map((c) => {
-                  const cell = grid[r][c];
-                  const isSel = selected.r === r && selected.c === c;
-                  const isWrong = !cell.given && cell.value !== 0 && solution && cell.value !== solution[r][c];
-                  const sameAsSelected = activeDigit !== 0 && cell.value === activeDigit;
-                  const thickRight = (c + 1) % 3 === 0 && c !== 8;
-                  const thickBottom = (r + 1) % 3 === 0 && r !== 8;
-                  return (
-                    <div
-                      key={`${r}-${c}`}
-                      onClick={() => setSelected({ r, c })}
-                      className={[
-                        "relative aspect-square select-none flex items-center justify-center",
-                        "text-xl md:text-2xl font-medium",
-                        "transition-colors",
-                        isSel ? "bg-indigo-50 outline outline-2 outline-indigo-400" : "",
-                        sameAsSelected && !isSel ? "bg-amber-200" : "bg-white",
-                        isWrong ? "ring-2 ring-red-400" : "",
-                        cell.given ? "text-slate-800" : "text-indigo-700",
-                        cell.conflict ? "bg-red-100" : "",
-                      ].join(" ")}
-                      style={{
-                        borderRight: thickRight ? "3px solid rgb(203,213,225)" : undefined,
-                        borderBottom: thickBottom ? "3px solid rgb(203,213,225)" : undefined,
-                      }}
-                    >
-                      {cell.value !== 0 ? (
-                        <span className={(cell.given ? "font-bold" : "font-semibold") + ( !cell.given && solution && cell.value !== solution[r][c] ? " text-red-600" : "")}>{cell.value}</span>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-0.5 p-0.5 w-full h-full">
-                          {range(9).map((n) => (
-                            <div key={n} className="text-[10px] md:text-[12px] leading-none text-slate-400 flex items-center justify-center">
-                              {cell.notes.has(n + 1) ? n + 1 : ""}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Numpad */}
-          <div className="grid grid-cols-5 gap-3 w-full max-w-md">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-              <button
-                key={n}
-                onClick={() => handleInput(n)}
-                className="aspect-square min-w-14 min-h-14 rounded-2xl bg-white shadow hover:shadow-md active:scale-[0.98] text-lg"
-                title={notesMode ? `Toggle note ${n}` : `Place ${n}`}
-              >
-                {n}
-              </button>
-            ))}
-            <button onClick={eraseCell} className="aspect-square min-w-14 min-h-14 rounded-2xl bg-white shadow hover:shadow-md text-base">Erase</button>
-          </div>
-        </div>
-
-        {/* Right: Controls */}
-        <aside className="space-y-4">
-          <div className="bg-white p-4 rounded-2xl shadow">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">New Game</span>
-              <select
-                className="px-2 py-1 border rounded-md"
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-              >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-              </select>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button onClick={() => newGame(difficulty)} className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">Start</button>
-              <button onClick={() => newGame("easy")} className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200">Easy</button>
-              <button onClick={() => newGame("medium")} className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200">Medium</button>
-              <button onClick={() => newGame("hard")} className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200">Hard</button>
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl shadow space-y-2">
-            <button onClick={() => setNotesMode((m) => !m)} className={"w-full px-3 py-2 rounded-xl border " + (notesMode ? "bg-indigo-50 border-indigo-300" : "bg-slate-50 hover:bg-slate-100")}>Notes Mode {notesMode ? "(On)" : "(Off)"} ▧</button>
-            <button onClick={autoNotes} className="w-full px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border">Auto Notes</button>
-            <button onClick={checkBoard} className="w-full px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border">Check Progress</button>
-            <button onClick={giveHint} className="w-full px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border">Hint</button>
-            <button onClick={validateAndSolve} className="w-full px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border">Solve Board</button>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl shadow text-sm text-slate-600">
-            <p className="font-semibold mb-1">Tips</p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Click a cell, then use 1–9 to fill. Use Erase (or Delete) to clear.</li>
-              <li>Press <kbd className="px-1 border rounded">N</kbd> to toggle notes mode.</li>
-              <li>Arrow keys move selection. Hints fill one random empty cell.</li>
-            </ul>
-          </div>
-
-          {isComplete && (
-            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-emerald-700">
-              🎉 Solved! Time: {prettyTime} — Mistakes: {mistakes}
-            </div>
-          )}
-        </aside>
-      </div>
-    </div>
-  );
-}
+// boot
+newGame('easy');
+</script>
+</body>
+</html>
