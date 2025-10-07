@@ -255,6 +255,23 @@ const ngStart = document.getElementById('ngStart');
 
 function prettyTime(sec){ const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return `${m}:${s}`; }
 
+// Query param helpers for difficulty
+function getUrlDifficulty(){
+  try{
+    const p=new URLSearchParams(window.location.search);
+    const d=p.get('difficulty');
+    return ['easy','medium','hard'].includes(d)?d:null;
+  }catch(e){ return null; }
+}
+function setUrlDifficulty(d){
+  try{
+    const p=new URLSearchParams(window.location.search);
+    p.set('difficulty', d);
+    const url = window.location.pathname + '?' + p.toString() + window.location.hash;
+    history.replaceState(null, '', url);
+  }catch(e){}
+}
+
 function startTimer(){
   if(state.timer) clearInterval(state.timer);
   if(state.paused) return; // don't tick when paused
@@ -366,6 +383,7 @@ function newGame(level=state.difficulty){
   clearInterval(state.timer); state.seconds=0; startTimer(); renderBoard(); renderPad(); elWin.classList.add('hide');
   state.bestSeconds = loadBest(state.difficulty);
   updateHeader();
+  setUrlDifficulty(state.difficulty);
 }
 
 function handleInput(n){ if(state.paused) return;
@@ -455,8 +473,9 @@ ngStart.addEventListener('click', ()=>{
   closeNg();
 });
 
-// boot
-newGame('easy');
+// boot: prefer difficulty from URL, fallback to easy
+const bootDifficulty = getUrlDifficulty() || 'easy';
+newGame(bootDifficulty);
 </script>
 </body>
 </html>
