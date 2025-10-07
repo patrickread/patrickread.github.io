@@ -74,6 +74,12 @@
     .modalActions{display:flex;gap:8px;justify-content:flex-end}
     .select{padding:8px;border:1px solid #cbd5e1;border-radius:10px}
 
+    /* High Scores modal */
+    #hsBackdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);backdrop-filter:blur(1px);z-index:70;display:none}
+    #hsBackdrop.show{display:block}
+    #hsModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:75}
+    #hsModal.show{display:flex}
+
     /* Mobile optimizations to avoid horizontal scroll */
     @media (max-width:600px){
       .wrap{padding:12px}
@@ -111,7 +117,7 @@
           <!-- Timer (tap to pause/resume) -->
           <span id="timerPill" class="pill button" title="Tap to pause/resume">⏱ <span id="timer">00:00</span></span>
           <span class="pill">❌ <span id="mistakes">0</span></span>
-          <span class="pill" title="Best time this session">🏆 <span id="bestPill">—</span></span>
+          <span id="bestPillBtn" class="pill button" title="View high scores">🏆 <span id="bestPill">—</span></span>
         </div>
 
         <div id="boardShell" class="boardShell">
@@ -173,6 +179,22 @@
   </div>
 </div>
 
+<!-- High Scores modal -->
+<div id="hsBackdrop"></div>
+<div id="hsModal" role="dialog" aria-modal="true" aria-labelledby="hsTitle">
+  <div class="modalCard">
+    <div class="modalHead">
+      <span id="hsTitle">High Scores</span>
+      <button id="hsClose" class="xbtn" aria-label="Close">✕</button>
+    </div>
+    <div class="modalBody">
+      <div class="row" style="justify-content:space-between"><div>Easy</div><div id="hsEasy">—</div></div>
+      <div class="row" style="justify-content:space-between"><div>Medium</div><div id="hsMedium">—</div></div>
+      <div class="row" style="justify-content:space-between"><div>Hard</div><div id="hsHard">—</div></div>
+    </div>
+  </div>
+  </div>
+
 <script>
 // ======================= Utilities =======================
 const range = (n) => [...Array(n).keys()];
@@ -223,10 +245,23 @@ const state={
   difficulty:'medium', grid:emptyGrid(), solution:null, selected:{r:0,c:0}, notesMode:false, mistakes:0, seconds:0, timer:null, activeDigit:0, bestSeconds:null,
 };
 
-// Best time helpers (sessionStorage per difficulty)
+// Best time helpers (prefer localStorage; fallback to sessionStorage)
 const bestKey = (d)=>`sudoku_best_${d}`;
-function loadBest(d){ try{ const v=sessionStorage.getItem(bestKey(d)); return v?parseInt(v,10):null; }catch(e){ return null; } }
-function saveBest(d,sec){ try{ sessionStorage.setItem(bestKey(d), String(sec)); }catch(e){} }
+function loadBest(d){
+  try{
+    const k=bestKey(d);
+    let v=null;
+    try{ v=localStorage.getItem(k); }catch(e){}
+    if(v!=null) return parseInt(v,10);
+    try{ v=sessionStorage.getItem(k); }catch(e){}
+    return v!=null ? parseInt(v,10) : null;
+  }catch(e){ return null; }
+}
+function saveBest(d,sec){
+  const k=bestKey(d);
+  try{ localStorage.setItem(k, String(sec)); }
+  catch(e){ try{ sessionStorage.setItem(k, String(sec)); }catch(e2){} }
+}
 
 // ======================= DOM helpers =======================
 const elBoard = document.getElementById('board');
@@ -253,7 +288,13 @@ const ngClose = document.getElementById('ngClose');
 const ngCancel = document.getElementById('ngCancel');
 const ngStart = document.getElementById('ngStart');
 
+// High Scores modal elements
+const hsBackdrop = document.getElementById('hsBackdrop');
+const hsModal = document.getElementById('hsModal');
+const hsClose = document.getElementById('hsClose');
+
 function prettyTime(sec){ const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return `${m}:${s}`; }
+function prettyOrDash(sec){ return sec==null ? '—' : prettyTime(sec); }
 
 // Query param helpers for difficulty
 function getUrlDifficulty(){
@@ -476,6 +517,21 @@ ngStart.addEventListener('click', ()=>{
 // boot: prefer difficulty from URL, fallback to easy
 const bootDifficulty = getUrlDifficulty() || 'easy';
 newGame(bootDifficulty);
+
+// High Scores modal
+function renderHighScores(){
+  const e = document.getElementById('hsEasy');
+  const m = document.getElementById('hsMedium');
+  const h = document.getElementById('hsHard');
+  if(e) e.textContent = prettyOrDash(loadBest('easy'));
+  if(m) m.textContent = prettyOrDash(loadBest('medium'));
+  if(h) h.textContent = prettyOrDash(loadBest('hard'));
+}
+function openHighScores(){ renderHighScores(); hsBackdrop.classList.add('show'); hsModal.classList.add('show'); }
+function closeHighScores(){ hsBackdrop.classList.remove('show'); hsModal.classList.remove('show'); }
+document.getElementById('bestPillBtn').addEventListener('click', openHighScores);
+hsClose.addEventListener('click', closeHighScores);
+hsBackdrop.addEventListener('click', closeHighScores);
 </script>
 </body>
 </html>
