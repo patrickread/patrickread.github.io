@@ -133,7 +133,6 @@
     <aside class="right">
       <div class="card controls">
         <button id="notesToggle" class="btn">Notes Mode (Off) ▧</button>
-        <button id="autoNotes" class="btn">Auto Notes</button>
         <!-- removed Check Progress -->
         <button id="hint" class="btn">Hint</button>
         <button id="solve" class="btn">Solve Board</button>
@@ -432,6 +431,8 @@ function newGame(level=state.difficulty){
 function handleInput(n){ if(state.paused) return;
   const {r,c}=state.selected; const g=clone(state.grid); const cell=g[r][c];
   if(cell.given) return;
+  // Don't allow reentry for a box after you already got it right
+  if(!state.notesMode && n!==0 && state.solution && cell.value === state.solution[r][c]) return;
   if(state.notesMode){ if(n===0) cell.notes.clear(); else if(cell.notes.has(n)) cell.notes.delete(n); else cell.notes.add(n); }
   else {
     cell.value=n; cell.notes.clear();
@@ -458,6 +459,7 @@ function autoNotes(){ if(state.paused) return; const g=clone(state.grid); const 
 function validateAndSolve(){ if(state.paused) return; const solved=solveFromGrid(state.grid); if(!solved){ alert('This grid has no solution (based on current entries).\nTry undoing some moves.'); return; }
   const g=clone(state.grid); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ g[r][c].value=solved[r][c]; g[r][c].notes.clear(); } state.dirty=true; state.grid=computeConflicts(g); renderBoard(); renderPad(); checkWin(); }
 
+function checkWinCondition(){ if(!state.solution) return false; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return false; return true; }
 function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return; // not yet
   clearInterval(state.timer); elFinalTime.textContent=prettyTime(state.seconds); elFinalMistakes.textContent=state.mistakes; elWin.classList.remove('hide');
   // Update best time
@@ -478,7 +480,6 @@ renderPad();
 document.getElementById('notesToggle').addEventListener('click',()=>{ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; });
 
 // Other controls
-document.getElementById('autoNotes').addEventListener('click',autoNotes);
 document.getElementById('hint').addEventListener('click',giveHint);
 document.getElementById('solve').addEventListener('click',validateAndSolve);
 
@@ -494,7 +495,10 @@ window.addEventListener('keydown',(e)=>{
 });
 
 // Pause toggle via timer pill + overlay
-function pauseGame(){ if(state.paused) return; state.paused=true; clearInterval(state.timer); pauseOverlay.classList.add('show'); elBoardShell.classList.add('hide'); padWrap.classList.add('hide'); }
+function pauseGame(){ if(state.paused) return;
+  // Don't allow pausing after you finish
+  if(state.solution && checkWinCondition()) return;
+  state.paused=true; clearInterval(state.timer); pauseOverlay.classList.add('show'); elBoardShell.classList.add('hide'); padWrap.classList.add('hide'); }
 function resumeGame(){ if(!state.paused) return; state.paused=false; pauseOverlay.classList.remove('show'); elBoardShell.classList.remove('hide'); padWrap.classList.remove('hide'); startTimer(); }
 function togglePause(){ state.paused ? resumeGame() : pauseGame(); }
 document.getElementById('timerPill').addEventListener('click', togglePause);
