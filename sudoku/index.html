@@ -9,6 +9,10 @@
       --bg:#f1f5f9; --panel:#fff; --ink:#0f172a; --muted:#64748b; --accent:#4f46e5; --ok:#059669; --danger:#dc2626; --amber:#fde68a;
       --grid-gap:2px; --box-thick:3px; --radius:18px; --shadow:0 6px 20px rgba(2,8,23,.08);
     }
+    [data-theme="dark"]{
+      --bg:#0f172a; --panel:#1e293b; --ink:#f1f5f9; --muted:#94a3b8; --accent:#6366f1; --ok:#10b981; --danger:#ef4444; --amber:#fbbf24;
+      --shadow:0 6px 20px rgba(0,0,0,.3);
+    }
     *{box-sizing:border-box}
     body{margin:0;font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
     html,body{max-width:100%;overflow-x:hidden}
@@ -18,34 +22,39 @@
     .card{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
     h1{margin:0 0 8px;font-weight:700}
     .pills{display:flex;gap:8px;flex-wrap:wrap}
-    .pill{background:#fff;border-radius:999px;padding:4px 10px;box-shadow:0 1px 3px rgba(2,8,23,.08)}
+    .pill{background:var(--panel);border-radius:999px;padding:4px 10px;box-shadow:0 1px 3px rgba(2,8,23,.08)}
     .pill.button{cursor:pointer}
 
     /* Board */
-    .boardShell{padding:10px;background:#fff;border-radius:20px;box-shadow:var(--shadow);max-width:100%;width:100%;overflow:hidden}
+    .boardShell{padding:10px;background:var(--panel);border-radius:20px;box-shadow:var(--shadow);max-width:100%;width:100%;overflow:hidden}
     .board{display:grid;grid-template-columns:repeat(9,1fr);gap:var(--grid-gap);background:#cbd5e1;padding:var(--grid-gap);border-radius:14px;max-width:100%;width:100%}
-    .cell{position:relative;aspect-ratio:1/1;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:22px;border-radius:6px;user-select:none;transition:background .12s, outline-color .12s, transform .03s}
-    .cell.given{color:#0f172a;font-weight:800}
-    .cell.input{color:#4338ca}
-    .cell.sel{background:#eef2ff;outline:2px solid #6366f1;outline-offset:-2px}
+    .cell{position:relative;aspect-ratio:1/1;background:var(--panel);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:22px;border-radius:6px;user-select:none;transition:background .12s, outline-color .12s, transform .03s}
+    .cell.given{color:var(--ink);font-weight:800}
+    .cell.input{color:var(--accent)}
+    .cell.sel{background:#eef2ff;outline:2px solid var(--accent);outline-offset:-2px}
+    [data-theme="dark"] .cell.sel{background:#334155}
     .cell.match{background:var(--amber)}
     .cell.wrong{outline:2px solid var(--danger); color:var(--danger);outline-offset:-2px}
     .cell.conflict{background:#fecaca}
+    [data-theme="dark"] .cell.conflict{background:#7f1d1d}
 
-    .notes{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);gap:0px;padding:0px;margin-top:-2px;color:#94a3b8;font-size:10px}
+    .notes{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);gap:0px;padding:0px;margin-top:-2px;color:var(--muted);font-size:10px}
     .note{display:flex;align-items:center;justify-content:center}
 
-    .controls .btn{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer}
+    .controls .btn{width:100%;padding:12px 14px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;cursor:pointer;color:var(--ink)}
     .controls .btn:hover{background:#eef2f7}
+    [data-theme="dark"] .controls .btn{border-color:#374151;background:#374151}
+    [data-theme="dark"] .controls .btn:hover{background:#4b5563}
     .btn.primary{background:var(--accent);color:#fff;border-color:transparent}
-    .kbd{padding:0 4px;border:1px solid #cbd5e1;border-radius:6px}
+    .kbd{padding:0 4px;border:1px solid #cbd5e1;border-radius:6px;background:var(--panel)}
 
     .row{display:flex;gap:8px;flex-wrap:wrap}
 
     /* Numpad – bigger, square touch targets with remaining counts */
     .pad{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
-    .btn.num{aspect-ratio:1/1;height:72px;border-radius:16px;font-size:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
-    .btn.num .sub{font-size:12px;color:#64748b;line-height:1}
+    .btn.num{aspect-ratio:1/1;height:72px;border-radius:16px;font-size:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:var(--panel);border:1px solid #e2e8f0;color:var(--ink)}
+    [data-theme="dark"] .btn.num{border-color:#374151}
+    .btn.num .sub{font-size:12px;color:var(--muted);line-height:1}
     .btn.num:disabled{opacity:.45;cursor:not-allowed;filter:saturate(.2)}
 
     .hide{display:none}
@@ -67,18 +76,31 @@
     #ngBackdrop.show{display:block}
     #ngModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:75}
     #ngModal.show{display:flex}
-    .modalCard{width:min(420px,92vw);background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
-    .modalHead{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #e5e7eb;font-weight:700}
+    .modalCard{width:min(420px,92vw);background:var(--panel);border-radius:16px;box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
+    .modalHead{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #e5e7eb;font-weight:700;color:var(--ink)}
     .modalBody{padding:14px;display:grid;gap:12px}
-    .xbtn{border:none;background:#f1f5f9;border-radius:8px;padding:6px 10px;cursor:pointer}
+    .xbtn{border:none;background:#f1f5f9;border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--ink)}
+    [data-theme="dark"] .xbtn{background:#374151}
     .modalActions{display:flex;gap:8px;justify-content:flex-end}
-    .select{padding:8px;border:1px solid #cbd5e1;border-radius:10px}
+    .select{padding:8px;border:1px solid #cbd5e1;border-radius:10px;background:var(--panel);color:var(--ink)}
 
     /* High Scores modal */
     #hsBackdrop{position:fixed;inset:0;background:rgba(15,23,42,.35);backdrop-filter:blur(1px);z-index:70;display:none}
     #hsBackdrop.show{display:block}
     #hsModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:75}
     #hsModal.show{display:flex}
+
+    /* Dark mode toggle */
+    .theme-toggle{
+      position:fixed;top:16px;right:16px;z-index:80;
+      width:48px;height:48px;border-radius:50%;
+      background:var(--panel);border:1px solid #e2e8f0;
+      display:flex;align-items:center;justify-content:center;
+      cursor:pointer;font-size:20px;color:var(--ink);
+      box-shadow:var(--shadow);transition:all .2s;
+    }
+    .theme-toggle:hover{transform:scale(1.05)}
+    [data-theme="dark"] .theme-toggle{border-color:#374151}
 
     /* Mobile optimizations to avoid horizontal scroll */
     @media (max-width:600px){
@@ -89,10 +111,16 @@
       .btn.num{height:64px}
       .pills{gap:6px}
       .pad{max-width:480px !important}
+      .theme-toggle{top:12px;right:12px;width:44px;height:44px;font-size:18px}
     }
   </style>
 </head>
 <body>
+
+<!-- Dark mode toggle -->
+<button id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+  <span id="themeIcon">🌙</span>
+</button>
 
 <!-- Confetti canvas -->
 <canvas id="confetti"></canvas>
@@ -243,6 +271,7 @@ const state={
   paused:false,
   dirty:false,
   difficulty:'medium', grid:emptyGrid(), solution:null, selected:{r:0,c:0}, notesMode:false, mistakes:0, seconds:0, timer:null, activeDigit:0, bestSeconds:null,
+  darkMode:false,
 };
 
 // Best time helpers (prefer localStorage; fallback to sessionStorage)
@@ -293,8 +322,35 @@ const hsBackdrop = document.getElementById('hsBackdrop');
 const hsModal = document.getElementById('hsModal');
 const hsClose = document.getElementById('hsClose');
 
+// Theme toggle elements
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+
 function prettyTime(sec){ const m=String(Math.floor(sec/60)).padStart(2,'0'); const s=String(sec%60).padStart(2,'0'); return `${m}:${s}`; }
 function prettyOrDash(sec){ return sec==null ? '—' : prettyTime(sec); }
+
+// Theme management
+function loadTheme(){
+  try{
+    const saved = localStorage.getItem('sudoku_theme');
+    if(saved === 'dark') state.darkMode = true;
+  }catch(e){}
+  applyTheme();
+}
+function saveTheme(){
+  try{
+    localStorage.setItem('sudoku_theme', state.darkMode ? 'dark' : 'light');
+  }catch(e){}
+}
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
+  themeIcon.textContent = state.darkMode ? '☀️' : '🌙';
+}
+function toggleTheme(){
+  state.darkMode = !state.darkMode;
+  applyTheme();
+  saveTheme();
+}
 
 // Query param helpers for difficulty
 function getUrlDifficulty(){
@@ -525,6 +581,7 @@ ngStart.addEventListener('click', ()=>{
 
 // boot: prefer difficulty from URL, fallback to easy
 const bootDifficulty = getUrlDifficulty() || 'easy';
+loadTheme(); // Initialize theme before starting game
 newGame(bootDifficulty);
 
 // High Scores modal
@@ -541,6 +598,9 @@ function closeHighScores(){ hsBackdrop.classList.remove('show'); hsModal.classLi
 document.getElementById('bestPillBtn').addEventListener('click', openHighScores);
 hsClose.addEventListener('click', closeHighScores);
 hsBackdrop.addEventListener('click', closeHighScores);
+
+// Theme toggle
+themeToggle.addEventListener('click', toggleTheme);
 
 // Warn on navigation if there is unsaved progress (user input)
 window.addEventListener('beforeunload', (e)=>{
