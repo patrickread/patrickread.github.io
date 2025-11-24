@@ -295,6 +295,72 @@ function saveBest(d,sec){
   catch(e){ try{ sessionStorage.setItem(k, String(sec)); }catch(e2){} }
 }
 
+// Game state persistence helpers
+const GAME_STATE_KEY = 'sudoku_game_state';
+function saveGameState(){
+  try{
+    // Don't save if game is solved
+    if(state.solution && checkWinCondition()) return;
+
+    const gameState = {
+      difficulty: state.difficulty,
+      grid: state.grid.map(row => row.map(cell => ({
+        value: cell.value,
+        given: cell.given,
+        notes: Array.from(cell.notes),
+        conflict: cell.conflict
+      }))),
+      solution: state.solution,
+      selected: state.selected,
+      notesMode: state.notesMode,
+      mistakes: state.mistakes,
+      seconds: state.seconds,
+      paused: state.paused,
+      activeDigit: state.activeDigit,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(GAME_STATE_KEY, JSON.stringify(gameState));
+  }catch(e){
+    // Silently fail if storage is unavailable
+  }
+}
+function loadGameState(){
+  try{
+    const saved = localStorage.getItem(GAME_STATE_KEY);
+    if(!saved) return null;
+    const gameState = JSON.parse(saved);
+
+    // Don't load if older than 7 days
+    const age = Date.now() - (gameState.timestamp || 0);
+    if(age > 7 * 24 * 60 * 60 * 1000) return null;
+
+    // Restore grid with Set objects for notes
+    const grid = gameState.grid.map(row => row.map(cell => ({
+      ...cell,
+      notes: new Set(cell.notes || [])
+    })));
+
+    return {
+      difficulty: gameState.difficulty,
+      grid: grid,
+      solution: gameState.solution,
+      selected: gameState.selected || {r:0,c:0},
+      notesMode: gameState.notesMode || false,
+      mistakes: gameState.mistakes || 0,
+      seconds: gameState.seconds || 0,
+      paused: gameState.paused || false,
+      activeDigit: gameState.activeDigit || 0
+    };
+  }catch(e){
+    return null;
+  }
+}
+function clearGameState(){
+  try{
+    localStorage.removeItem(GAME_STATE_KEY);
+  }catch(e){}
+}
+
 // ======================= DOM helpers =======================
 const elBoard = document.getElementById('board');
 const elBoardShell = document.getElementById('boardShell');
@@ -376,7 +442,12 @@ function startTimer(){
   if(state.timer) clearInterval(state.timer);
   if(state.paused) return; // don't tick when paused
   elTimer.textContent=prettyTime(state.seconds);
-  state.timer=setInterval(()=>{ state.seconds++; elTimer.textContent=prettyTime(state.seconds); },1000);
+  state.timer=setInterval(()=>{
+    state.seconds++;
+    elTimer.textContent=prettyTime(state.seconds);
+    // Auto-save every 10 seconds while playing
+    if(state.seconds % 10 === 0) saveGameState();
+  },1000);
 }
 
 // ======================= Confetti =======================
@@ -427,7 +498,7 @@ function renderBoard(){
       if(thickBottom) d.style.borderBottom=`var(--box-thick) solid #cbd5e1`;
 
       d.tabIndex=0; d.setAttribute('role','button'); d.setAttribute('aria-label',`r${r+1} c${c+1}`);
-      d.addEventListener('click',()=>{ if(state.paused) return; state.selected={r,c}; state.activeDigit=state.grid[r][c].value||0; renderBoard(); });
+      d.addEventListener('click',()=>{ if(state.paused) return; state.selected={r,c}; state.activeDigit=state.grid[r][c].value||0; renderBoard(); saveGameState(); });
 
       if(cell.value!==0){ d.textContent=cell.value; }
       else{
@@ -473,7 +544,7 @@ function updateHeader(){
 }
 
 // ======================= Game logic wrappers =======================
-function newGame(level=state.difficulty){
+function newGame(level=state.difficulty, clearSaved=true){
   state.difficulty=level; updateHeader();
   const solved=generateSolvedBoard();
   const puzzle=makePuzzleFromSolution(solved, level);
@@ -485,6 +556,7 @@ function newGame(level=state.difficulty){
   state.dirty=false;
   updateHeader();
   setUrlDifficulty(state.difficulty);
+  if(clearSaved) clearGameState();
 }
 
 function handleInput(n){ if(state.paused) return;
@@ -509,14 +581,15 @@ function handleInput(n){ if(state.paused) return;
   }
   state.dirty=true;
   state.grid=computeConflicts(g); state.activeDigit=state.grid[r][c].value||0; updateHeader(); renderBoard(); renderPad(); checkWin();
+  saveGameState(); // Auto-save after input
 }
 
-function giveHint(){ if(state.paused) return; if(!state.solution) return; const empty=findEmpty(state.grid); if(!empty) return; const {r,c}=empty; const g=clone(state.grid); g[r][c].value=state.solution[r][c]; g[r][c].notes.clear(); state.dirty=true; state.grid=computeConflicts(g); renderBoard(); renderPad(); checkWin(); }
+function giveHint(){ if(state.paused) return; if(!state.solution) return; const empty=findEmpty(state.grid); if(!empty) return; const {r,c}=empty; const g=clone(state.grid); g[r][c].value=state.solution[r][c]; g[r][c].notes.clear(); state.dirty=true; state.grid=computeConflicts(g); renderBoard(); renderPad(); checkWin(); saveGameState(); }
 
 function autoNotes(){ if(state.paused) return; const g=clone(state.grid); const vals=toValues(g); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ const cell=g[r][c]; if(cell.value!==0){ cell.notes.clear(); continue;} const s=new Set(); for(let v=1;v<=9;v++) if(isSafe(vals,r,c,v)) s.add(v); cell.notes=s;} state.dirty=true; state.grid=computeConflicts(g); renderBoard(); /* counts unchanged */ }
 
 function validateAndSolve(){ if(state.paused) return; const solved=solveFromGrid(state.grid); if(!solved){ alert('This grid has no solution (based on current entries).\nTry undoing some moves.'); return; }
-  const g=clone(state.grid); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ g[r][c].value=solved[r][c]; g[r][c].notes.clear(); } state.dirty=true; state.grid=computeConflicts(g); renderBoard(); renderPad(); checkWin(); }
+  const g=clone(state.grid); for(let r=0;r<9;r++) for(let c=0;c<9;c++){ g[r][c].value=solved[r][c]; g[r][c].notes.clear(); } state.dirty=true; state.grid=computeConflicts(g); renderBoard(); renderPad(); checkWin(); saveGameState(); }
 
 function checkWinCondition(){ if(!state.solution) return false; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return false; return true; }
 function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return; // not yet
@@ -530,13 +603,14 @@ function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=
   launchConfetti();
   // Solved: no need to warn about navigation
   state.dirty=false;
+  clearGameState(); // Clear saved state when solved
 }
 
 // ======================= Events =======================
 renderPad();
 
 // Notes toggle
-document.getElementById('notesToggle').addEventListener('click',()=>{ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; });
+document.getElementById('notesToggle').addEventListener('click',()=>{ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; saveGameState(); });
 
 // Other controls
 document.getElementById('hint').addEventListener('click',giveHint);
@@ -546,11 +620,11 @@ document.getElementById('solve').addEventListener('click',validateAndSolve);
 window.addEventListener('keydown',(e)=>{
   if(e.key>='1' && e.key<='9') handleInput(parseInt(e.key,10));
   if(['0','Backspace','Delete'].includes(e.key)) handleInput(0);
-  if(e.key==='n' || e.key==='N'){ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; }
-  if(e.key==='ArrowUp'){ state.selected={r:(state.selected.r+8)%9,c:state.selected.c}; renderBoard(); }
-  if(e.key==='ArrowDown'){ state.selected={r:(state.selected.r+1)%9,c:state.selected.c}; renderBoard(); }
-  if(e.key==='ArrowLeft'){ state.selected={r:state.selected.r,c:(state.selected.c+8)%9}; renderBoard(); }
-  if(e.key==='ArrowRight'){ state.selected={r:state.selected.r,c:(state.selected.c+1)%9}; renderBoard(); }
+  if(e.key==='n' || e.key==='N'){ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; saveGameState(); }
+  if(e.key==='ArrowUp'){ state.selected={r:(state.selected.r+8)%9,c:state.selected.c}; renderBoard(); saveGameState(); }
+  if(e.key==='ArrowDown'){ state.selected={r:(state.selected.r+1)%9,c:state.selected.c}; renderBoard(); saveGameState(); }
+  if(e.key==='ArrowLeft'){ state.selected={r:state.selected.r,c:(state.selected.c+8)%9}; renderBoard(); saveGameState(); }
+  if(e.key==='ArrowRight'){ state.selected={r:state.selected.r,c:(state.selected.c+1)%9}; renderBoard(); saveGameState(); }
 });
 
 // Pause toggle via timer pill + overlay
@@ -582,10 +656,94 @@ ngStart.addEventListener('click', ()=>{
   closeNg();
 });
 
-// boot: prefer difficulty from URL, fallback to easy
-const bootDifficulty = getUrlDifficulty() || 'easy';
+// Service Worker registration for offline support
+if('serviceWorker' in navigator){
+  // Register immediately, don't wait for load event
+  navigator.serviceWorker.register('./sw.js', { scope: './' })
+    .then((reg)=>{
+      console.log('Service Worker registered');
+
+      // Function to cache the current page
+      const cacheCurrentPage = () => {
+        caches.open('sudoku-v1').then((cache) => {
+          // Cache with multiple keys to ensure we can find it later
+          const url = window.location.href;
+          fetch(url).then((response) => {
+            if(response.ok){
+              cache.put(url, response.clone());
+              // Also cache with relative path
+              cache.put('./index.html', response.clone()).catch(() => {});
+              cache.put('index.html', response.clone()).catch(() => {});
+            }
+          }).catch(() => {
+            // If fetch fails, try to add directly
+            cache.add(url).catch(() => {
+              cache.add('./index.html').catch(() => {});
+            });
+          });
+        });
+      };
+
+      // Wait for service worker to be ready, then cache the current page
+      if(reg.installing){
+        reg.installing.addEventListener('statechange', function() {
+          if(this.state === 'activated'){
+            cacheCurrentPage();
+          }
+        });
+      } else if(reg.waiting){
+        reg.waiting.addEventListener('statechange', function() {
+          if(this.state === 'activated'){
+            cacheCurrentPage();
+          }
+        });
+      } else if(reg.active){
+        // Already active, cache immediately
+        cacheCurrentPage();
+      }
+
+      // Also try to cache after a short delay to ensure SW is ready
+      setTimeout(cacheCurrentPage, 1000);
+    })
+    .catch((err)=>{ console.log('Service Worker registration failed:', err); });
+}
+
+// boot: try to load saved game, otherwise start new game
 loadTheme(); // Initialize theme before starting game
-newGame(bootDifficulty);
+const savedState = loadGameState();
+if(savedState && savedState.solution){
+  // Restore saved game
+  state.difficulty = savedState.difficulty;
+  state.grid = savedState.grid;
+  state.solution = savedState.solution;
+  state.selected = savedState.selected;
+  state.notesMode = savedState.notesMode;
+  state.mistakes = savedState.mistakes;
+  state.seconds = savedState.seconds;
+  state.paused = savedState.paused;
+  state.activeDigit = savedState.activeDigit;
+  state.bestSeconds = loadBest(state.difficulty);
+  state.dirty = true; // Mark as dirty since we have progress
+
+  // Restore UI
+  updateHeader();
+  setUrlDifficulty(state.difficulty);
+  document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`;
+  renderBoard();
+  renderPad();
+  elTimer.textContent = prettyTime(state.seconds);
+  if(state.paused){
+    pauseOverlay.classList.add('show');
+    elBoardShell.classList.add('hide');
+    padWrap.classList.add('hide');
+  } else {
+    startTimer();
+  }
+} else {
+  // Start new game
+  const bootDifficulty = getUrlDifficulty() || 'easy';
+  newGame(bootDifficulty);
+}
 
 // High Scores modal
 function renderHighScores(){
