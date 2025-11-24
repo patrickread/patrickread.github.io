@@ -10,7 +10,7 @@
       --grid-gap:2px; --box-thick:3px; --radius:18px; --shadow:0 6px 20px rgba(2,8,23,.08);
     }
     [data-theme="dark"]{
-      --bg:#0f172a; --panel:#1e293b; --ink:#f1f5f9; --muted:#94a3b8; --accent:#E394DC; --ok:#10b981; --danger:#ef4444; --amber:#fbbf24;
+      --bg:#0f172a; --panel:#1e293b; --ink:#f1f5f9; --muted:#94a3b8; --accent:#818cf8; --ok:#10b981; --danger:#ef4444; --amber:#d97706;
       --shadow:0 6px 20px rgba(0,0,0,.3);
     }
     *{box-sizing:border-box}
@@ -33,8 +33,9 @@
     .cell.given{color:var(--ink);font-weight:800}
     .cell.input{color:var(--accent)}
     .cell.sel{background:#eef2ff;outline:2px solid var(--accent);outline-offset:-2px}
-    [data-theme="dark"] .cell.sel{background:#334155}
+    [data-theme="dark"] .cell.sel{background:#173711}
     .cell.match{background:var(--amber)}
+    [data-theme="dark"] .cell.match{background: rgba(9, 106, 9, 0.25); color: #1c1919;}
     .cell.wrong{outline:2px solid var(--danger); color:var(--danger);outline-offset:-2px}
     .cell.conflict{background:#fecaca}
     [data-theme="dark"] .cell.conflict{background:#7f1d1d}
