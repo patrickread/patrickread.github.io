@@ -564,7 +564,7 @@ function handleInput(n){ if(state.paused) return;
   if(cell.given) return;
   // Don't allow reentry for a box after you already got it right
   if(!state.notesMode && n!==0 && state.solution && cell.value === state.solution[r][c]) return;
-  if(state.notesMode){ if(n===0) cell.notes.clear(); else if(cell.notes.has(n)) cell.notes.delete(n); else cell.notes.add(n); }
+  if(state.notesMode){ if(n===0) { cell.notes.clear(); cell.value=0; } else if(cell.notes.has(n)) cell.notes.delete(n); else cell.notes.add(n); }
   else {
     cell.value=n; cell.notes.clear();
     if(state.solution && n!==0){
