@@ -21,7 +21,7 @@
     @media (max-width:900px){.app{grid-template-columns:1fr}}
     .card{background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
     h1{margin:0 0 8px;font-weight:700}
-    .pills{display:flex;gap:8px;flex-wrap:wrap}
+    .pills{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-evenly}
     .pill{background:var(--panel);border-radius:999px;padding:4px 10px;box-shadow:0 1px 3px rgba(2,8,23,.08)}
     .pill.button{cursor:pointer}
     .pill#timerPill{min-width:80px;text-align:center}
@@ -105,15 +105,30 @@
 
     /* Mobile optimizations to avoid horizontal scroll */
     @media (max-width:600px){
-      .wrap{padding:0px}
+      html,body{overflow-x:hidden;height:100vh;position:relative}
+      .wrap{padding:2px;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:100vh}
+      .app{grid-template-columns:1fr;gap:0}
       .left .card,.right .card{width:100%}
-      .left .card{align-items:stretch !important}
-      .card{border-radius: 0px; padding: 8px;}
+      .left .card{align-items:stretch !important;gap:4px;padding:4px}
+      .right{display:none}
+      .mobile-controls{display:flex !important;gap:6px;margin-top:4px}
+      .mobile-controls .btn{flex:1;padding:12px;font-size:15px;margin-bottom:0;min-height:44px}
+      .card{border-radius: 0px; padding: 2px;}
       .cell{font-size:24px}
-      .btn.num{height:64px}
-      .pills{gap:6px}
-      .pad{max-width:480px !important}
-      .theme-toggle{top:12px;right:12px;width:44px;height:44px;font-size:18px}
+      .btn.num{height:64px;font-size:22px;min-height:64px}
+      .btn.num .sub{font-size:12px}
+      .pills{gap:3px;font-size:11px;margin:0;padding:2px 0;justify-content:space-evenly}
+      .pill{padding:3px 8px}
+      .pad{max-width:100% !important;gap:6px;margin-top:4px}
+      .theme-toggle{top:4px;right:4px;width:36px;height:36px;font-size:14px}
+      h1{font-size:18px;margin:0;line-height:1.2}
+      #newGameBtn{font-size:11px;padding:4px 8px;min-height:auto}
+      .boardShell{padding:6px}
+      .board{padding:2px;gap:2px}
+      .boardShell .board .cell{font-size:22px}
+      .left .card > div:first-child{margin-bottom:0;gap:6px}
+      #winMobile.hide{display:none !important}
+      #winMobile:not(.hide){display:block !important;font-size:12px;padding:6px}
     }
   </style>
 </head>
@@ -140,7 +155,10 @@
 
     <div class="left">
       <div class="card" style="display:flex;flex-direction:column;gap:12px;align-items:center">
-        <h1>Sudoku</h1>
+        <div style="display:flex;align-items:center;gap:12px;width:100%;justify-content:center">
+          <h1 style="margin:0">Sudoku</h1>
+          <button id="newGameBtn" class="btn primary" style="padding:8px 16px;font-size:14px;white-space:nowrap">New Game</button>
+        </div>
         <div class="pills">
           <!-- Difficulty pill (tap to open New Game modal) -->
           <span id="difficultyPill" class="pill button" title="Start a new game">Difficulty: <b id="difficultyLabel" style="text-transform:capitalize;margin-left:6px">medium</b></span>
@@ -157,24 +175,24 @@
         <div class="pad" style="max-width:420px;width:100%;margin-top:10px">
           <!-- numpad 1..9 + erase (rendered by JS) -->
         </div>
+
+        <!-- Mobile controls (shown only on mobile) -->
+        <div class="mobile-controls" style="display:none;width:100%;max-width:420px;margin-top:8px">
+          <button id="notesToggleMobile" class="btn">Notes Mode (Off) ▧</button>
+          <button id="hintMobile" class="btn">Hint</button>
+        </div>
+
+        <!-- Mobile win message (shown only on mobile) -->
+        <div id="winMobile" class="card hide" style="margin-top:4px;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;display:none;font-size:13px;padding:8px;text-align:center">
+          🎉 Solved! Time: <span id="finalTimeMobile"></span> — Mistakes: <span id="finalMistakesMobile"></span> — Best: <span id="bestTimeMobile"></span>
+        </div>
       </div>
     </div>
 
     <aside class="right">
       <div class="card controls">
         <button id="notesToggle" class="btn">Notes Mode (Off) ▧</button>
-        <!-- removed Check Progress -->
         <button id="hint" class="btn">Hint</button>
-        <button id="solve" class="btn">Solve Board</button>
-      </div>
-
-      <div class="card" style="margin-top:16px;color:var(--muted);font-size:14px">
-        <p style="font-weight:700;margin:0 0 6px">Tips</p>
-        <ul style="margin:0 0 0 18px;padding:0;display:grid;gap:4px">
-          <li>Click a cell, then use 1–9 to fill. Use Erase (or Delete) to clear.</li>
-          <li>Press <span class="kbd">N</span> to toggle notes mode.</li>
-          <li>Arrow keys move selection. Hints fill one random empty cell.</li>
-        </ul>
       </div>
 
       <div id="win" class="card hide" style="margin-top:16px;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0">
@@ -480,9 +498,11 @@ function newGame(level=state.difficulty){
   state.mistakes=0; state.selected={r:0,c:0}; state.activeDigit=0;
   state.paused=false; pauseOverlay.classList.remove('show'); elBoardShell.classList.remove('hide'); padWrap.classList.remove('hide');
   clearInterval(state.timer); state.seconds=0; startTimer(); renderBoard(); renderPad(); elWin.classList.add('hide');
+  const elWinMobile = document.getElementById('winMobile');
+  if(elWinMobile) elWinMobile.classList.add('hide');
   state.bestSeconds = loadBest(state.difficulty);
   state.dirty=false;
-  state.notesMode=false; document.getElementById('notesToggle').textContent = 'Notes Mode (Off) ▧';
+  state.notesMode=false; updateNotesToggleButtons();
   updateHeader();
   setUrlDifficulty(state.difficulty);
 }
@@ -521,12 +541,20 @@ function validateAndSolve(){ if(state.paused) return; const solved=solveFromGrid
 function checkWinCondition(){ if(!state.solution) return false; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return false; return true; }
 function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=0;c<9;c++) if(state.grid[r][c].value!==state.solution[r][c]) return; // not yet
   clearInterval(state.timer); elFinalTime.textContent=prettyTime(state.seconds); elFinalMistakes.textContent=state.mistakes; elWin.classList.remove('hide');
+  const elFinalTimeMobile = document.getElementById('finalTimeMobile');
+  const elFinalMistakesMobile = document.getElementById('finalMistakesMobile');
+  const elBestTimeMobile = document.getElementById('bestTimeMobile');
+  const elWinMobile = document.getElementById('winMobile');
+  if(elFinalTimeMobile) elFinalTimeMobile.textContent = prettyTime(state.seconds);
+  if(elFinalMistakesMobile) elFinalMistakesMobile.textContent = state.mistakes;
+  if(elWinMobile) elWinMobile.classList.remove('hide');
   // Update best time
   if(state.bestSeconds==null || state.seconds < state.bestSeconds){ state.bestSeconds = state.seconds; saveBest(state.difficulty, state.bestSeconds); }
   const elBestPill = document.getElementById('bestPill');
   const elBestTime = document.getElementById('bestTime');
   if(elBestPill) elBestPill.textContent = prettyTime(state.bestSeconds);
   if(elBestTime) elBestTime.textContent = prettyTime(state.bestSeconds);
+  if(elBestTimeMobile) elBestTimeMobile.textContent = prettyTime(state.bestSeconds);
   launchConfetti();
   // Solved: no need to warn about navigation
   state.dirty=false;
@@ -535,18 +563,32 @@ function checkWin(){ if(!state.solution) return; for(let r=0;r<9;r++) for(let c=
 // ======================= Events =======================
 renderPad();
 
+// Notes toggle helper
+function updateNotesToggleButtons(){
+  const text = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`;
+  const desktopBtn = document.getElementById('notesToggle');
+  const mobileBtn = document.getElementById('notesToggleMobile');
+  if(desktopBtn) desktopBtn.textContent = text;
+  if(mobileBtn) mobileBtn.textContent = text;
+}
+function toggleNotesMode(){
+  state.notesMode = !state.notesMode;
+  updateNotesToggleButtons();
+}
+
 // Notes toggle
-document.getElementById('notesToggle').addEventListener('click',()=>{ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; });
+document.getElementById('notesToggle').addEventListener('click', toggleNotesMode);
+document.getElementById('notesToggleMobile').addEventListener('click', toggleNotesMode);
 
 // Other controls
 document.getElementById('hint').addEventListener('click',giveHint);
-document.getElementById('solve').addEventListener('click',validateAndSolve);
+document.getElementById('hintMobile').addEventListener('click',giveHint);
 
 // keyboard
 window.addEventListener('keydown',(e)=>{
   if(e.key>='1' && e.key<='9') handleInput(parseInt(e.key,10));
   if(['0','Backspace','Delete'].includes(e.key)) handleInput(0);
-  if(e.key==='n' || e.key==='N'){ state.notesMode=!state.notesMode; document.getElementById('notesToggle').textContent = `Notes Mode (${state.notesMode?'On':'Off'}) ▧`; }
+  if(e.key==='n' || e.key==='N') toggleNotesMode();
   if(e.key==='ArrowUp'){ state.selected={r:(state.selected.r+8)%9,c:state.selected.c}; renderBoard(); }
   if(e.key==='ArrowDown'){ state.selected={r:(state.selected.r+1)%9,c:state.selected.c}; renderBoard(); }
   if(e.key==='ArrowLeft'){ state.selected={r:state.selected.r,c:(state.selected.c+8)%9}; renderBoard(); }
@@ -563,13 +605,17 @@ function togglePause(){ state.paused ? resumeGame() : pauseGame(); }
 document.getElementById('timerPill').addEventListener('click', togglePause);
 pauseOverlay.addEventListener('click', resumeGame);
 
-// New Game modal open (tap difficulty pill)
-elDiffPill.addEventListener('click', ()=>{
+// New Game modal open helper
+function openNewGameModal(){
   // preset select to current difficulty
   elDiffSelectInModal.value = state.difficulty;
   ngBackdrop.classList.add('show');
   ngModal.classList.add('show');
-});
+}
+// New Game modal open (tap difficulty pill)
+elDiffPill.addEventListener('click', openNewGameModal);
+// New Game button
+document.getElementById('newGameBtn').addEventListener('click', openNewGameModal);
 // New Game modal close
 function closeNg(){ ngBackdrop.classList.remove('show'); ngModal.classList.remove('show'); }
 ngClose.addEventListener('click', closeNg);
