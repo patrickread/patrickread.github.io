@@ -482,6 +482,7 @@ function newGame(level=state.difficulty){
   clearInterval(state.timer); state.seconds=0; startTimer(); renderBoard(); renderPad(); elWin.classList.add('hide');
   state.bestSeconds = loadBest(state.difficulty);
   state.dirty=false;
+  state.notesMode=false; document.getElementById('notesToggle').textContent = 'Notes Mode (Off) ▧';
   updateHeader();
   setUrlDifficulty(state.difficulty);
 }
